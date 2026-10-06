@@ -51,6 +51,7 @@ public class PmsProductAttributeCategoryServiceImpl implements PmsProductAttribu
     @Override
     public List<PmsProductAttributeCategory> getList(Integer pageSize, Integer pageNum) {
         PageHelper.startPage(pageNum,pageSize);
+        // 空的条件容器相当于 selectAll()
         return productAttributeCategoryMapper.selectByExample(new PmsProductAttributeCategoryExample());
     }
 

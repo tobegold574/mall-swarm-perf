@@ -33,6 +33,7 @@ public class OmsCompanyAddress implements Serializable {
     @Schema(title = "详细地址")
     private String detailAddress;
 
+    // Java 原生序列化机制的版本号 当类做了不兼容修改时主动 +1，相当于老数据报废
     private static final long serialVersionUID = 1L;
 
     public Long getId() {

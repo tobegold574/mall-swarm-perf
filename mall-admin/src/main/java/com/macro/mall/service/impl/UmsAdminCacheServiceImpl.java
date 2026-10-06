@@ -14,29 +14,36 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class UmsAdminCacheServiceImpl implements UmsAdminCacheService {
+    // redis api 封装
     @Autowired
     private RedisService redisService;
+    // key 的项目命名空间前缀
     @Value("${redis.database}")
     private String REDIS_DATABASE;
+    // 缓存 TTL
     @Value("${redis.expire.common}")
     private Long REDIS_EXPIRE;
+    // key 的实体段
     @Value("${redis.key.admin}")
     private String REDIS_KEY_ADMIN;
 
     @Override
     public void delAdmin(Long adminId) {
+        // 直接拼接
         String key = REDIS_DATABASE + ":" + REDIS_KEY_ADMIN + ":" + adminId;
         redisService.del(key);
     }
 
     @Override
     public UmsAdmin getAdmin(Long adminId) {
+        // 直接拼接
         String key = REDIS_DATABASE + ":" + REDIS_KEY_ADMIN + ":" + adminId;
         return (UmsAdmin) redisService.get(key);
     }
 
     @Override
     public void setAdmin(UmsAdmin admin) {
+        // 直接拼接
         String key = REDIS_DATABASE + ":" + REDIS_KEY_ADMIN + ":" + admin.getId();
         redisService.set(key, admin, REDIS_EXPIRE);
     }

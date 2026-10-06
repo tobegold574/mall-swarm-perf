@@ -5,6 +5,11 @@ import cn.hutool.json.JSONUtil;
 /**
  * 通用返回对象
  * Created by macro on 2019/4/19.
+ * 
+ * 静态工厂方法（软约束）
+ * 提倡结果由静态方法产出。保证全局格式一致
+ * 但是也保留了 public setter/getter 主要是为了兼容 Jackson 序列化/反序列化
+ * master 新增了 toString()，用 Hutool 的 JSONUtil 输出 JSON，方便日志排查
  */
 public class CommonResult<T> {
     private long code;
@@ -124,6 +129,7 @@ public class CommonResult<T> {
         this.data = data;
     }
 
+    // master 新增：对象转 JSON 字符串（Hutool），便于打日志
     @Override
     public String toString() {
         return JSONUtil.toJsonStr(this);

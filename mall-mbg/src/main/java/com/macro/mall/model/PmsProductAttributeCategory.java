@@ -12,6 +12,7 @@ public class PmsProductAttributeCategory implements Serializable {
     private Integer attributeCount;
 
     @Schema(title = "参数数量")
+    // 冗余计数器，减少 count() 调用次数
     private Integer paramCount;
 
     private static final long serialVersionUID = 1L;

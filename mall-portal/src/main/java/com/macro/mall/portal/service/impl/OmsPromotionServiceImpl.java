@@ -29,6 +29,8 @@ public class OmsPromotionServiceImpl implements OmsPromotionService {
     @Override
     public List<CartPromotionItem> calcCartPromotion(List<OmsCartItem> cartItemList) {
         //1.先根据productId对CartItem进行分组，以spu为单位进行计算优惠
+        // SPU 就是所有变体共有的信息，剥离“颜色”、“容量”等变体
+        // 先以 SPU 拆分可以支持跨变量维度统一计算
         Map<Long, List<OmsCartItem>> productCartMap = groupCartItemBySpu(cartItemList);
         //2.查询所有商品的优惠相关信息
         List<PromotionProduct> promotionProductList = getPromotionProductList(cartItemList);

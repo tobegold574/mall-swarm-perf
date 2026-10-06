@@ -52,6 +52,7 @@ public class MemberReadHistoryServiceImpl implements MemberReadHistoryService {
     @Override
     public Page<MemberReadHistory> list(Integer pageNum, Integer pageSize) {
         UmsMember member = memberService.getCurrentMember();
+        // 页号从 0 开始，兼容所有 Spring Data 仓储（此处指 mongoDB）
         Pageable pageable = PageRequest.of(pageNum-1, pageSize);
         return memberReadHistoryRepository.findByMemberIdOrderByCreateTimeDesc(member.getId(),pageable);
     }

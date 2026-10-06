@@ -35,8 +35,10 @@ public class PmsBrandServiceImpl implements PmsBrandService {
     @Override
     public int createBrand(PmsBrandParam pmsBrandParam) {
         PmsBrand pmsBrand = new PmsBrand();
+        // 属性批量拷贝工具 名字相同+类型兼容 底层为反射机制
         BeanUtils.copyProperties(pmsBrandParam, pmsBrand);
         //如果创建时首字母为空，取名称的第一个为首字母
+        // null安全
         if (StringUtils.isEmpty(pmsBrand.getFirstLetter())) {
             pmsBrand.setFirstLetter(pmsBrand.getName().substring(0, 1));
         }

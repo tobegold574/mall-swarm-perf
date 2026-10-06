@@ -1,11 +1,16 @@
 package com.macro.mall.controller;
 
 import com.macro.mall.common.api.CommonResult;
+
+// 订单域表
 import com.macro.mall.model.OmsCompanyAddress;
+// 获取全部地址
 import com.macro.mall.service.OmsCompanyAddressService;
 
+// 接口级别注解和 Controller 级别注解
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;

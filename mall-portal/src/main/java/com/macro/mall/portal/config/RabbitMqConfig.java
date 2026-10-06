@@ -17,9 +17,9 @@ public class RabbitMqConfig {
      */
     @Bean
     DirectExchange orderDirect() {
-        return (DirectExchange) ExchangeBuilder
-                .directExchange(QueueEnum.QUEUE_ORDER_CANCEL.getExchange())
-                .durable(true)
+        return (DirectExchange) ExchangeBuilder     // 强转，因为直接返回的是父类的实例
+                .directExchange(QueueEnum.QUEUE_ORDER_CANCEL.getExchange())     // builder 模式声明 direct 交换机
+                .durable(true)  // 开启持久化
                 .build();
     }
 
@@ -48,9 +48,9 @@ public class RabbitMqConfig {
     @Bean
     public Queue orderTtlQueue() {
         return QueueBuilder
-                .durable(QueueEnum.QUEUE_TTL_ORDER_CANCEL.getName())
-                .withArgument("x-dead-letter-exchange", QueueEnum.QUEUE_ORDER_CANCEL.getExchange())//到期后转发的交换机
-                .withArgument("x-dead-letter-routing-key", QueueEnum.QUEUE_ORDER_CANCEL.getRouteKey())//到期后转发的路由键
+                .durable(QueueEnum.QUEUE_TTL_ORDER_CANCEL.getName())    // 队列持久化
+                .withArgument("x-dead-letter-exchange", QueueEnum.QUEUE_ORDER_CANCEL.getExchange()) // 死信转投目标交换机
+                .withArgument("x-dead-letter-routing-key", QueueEnum.QUEUE_ORDER_CANCEL.getRouteKey())  // 死信转投用的路由键
                 .build();
     }
 
@@ -60,8 +60,8 @@ public class RabbitMqConfig {
     @Bean
     Binding orderBinding(DirectExchange orderDirect,Queue orderQueue){
         return BindingBuilder
-                .bind(orderQueue)
-                .to(orderDirect)
+                .bind(orderQueue)   // 绑定队列
+                .to(orderDirect)    // 绑定到的交换机
                 .with(QueueEnum.QUEUE_ORDER_CANCEL.getRouteKey());
     }
 

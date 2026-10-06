@@ -46,6 +46,7 @@ public class UmsMemberCacheServiceImpl implements UmsMemberCacheService {
         redisService.set(key, member, REDIS_EXPIRE);
     }
 
+    // 到过期时间自动消失，落库维护太麻烦
     @CacheException
     @Override
     public void setAuthCode(String telephone, String authCode) {

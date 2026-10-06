@@ -1,6 +1,8 @@
 package com.macro.mall.controller;
 
+// token 只用于访问 redis，真正状态存在 redis（多实例状态共享）
 import cn.dev33.satoken.stp.SaTokenInfo;
+
 import cn.hutool.core.collection.CollUtil;
 import com.macro.mall.common.api.CommonPage;
 import com.macro.mall.common.api.CommonResult;
@@ -9,6 +11,7 @@ import com.macro.mall.dto.UmsAdminParam;
 import com.macro.mall.dto.UpdateAdminPasswordParam;
 import com.macro.mall.model.UmsAdmin;
 import com.macro.mall.model.UmsRole;
+
 import com.macro.mall.service.UmsAdminService;
 import com.macro.mall.service.UmsRoleService;
 
@@ -37,6 +40,8 @@ public class UmsAdminController {
     private UmsAdminService adminService;
     @Autowired
     private UmsRoleService roleService;
+    
+    // 值为 Bearer
     @Value("${sa-token.token-prefix}")
     private String tokenHead;
 

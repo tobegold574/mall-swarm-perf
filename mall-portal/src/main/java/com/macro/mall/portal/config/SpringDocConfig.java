@@ -16,6 +16,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 /**
  * SpringDoc相关配置
  * Created by macro on 2024/3/5.
+ * 
+ * springdoc-openapi 把注解编译成 json，而 swagger UI/Knife4j 是渲染 json 的页面
  */
 @Configuration
 public class SpringDocConfig implements WebMvcConfigurer {
@@ -43,6 +45,7 @@ public class SpringDocConfig implements WebMvcConfigurer {
                                         .bearerFormat("JWT")));
     }
 
+    // 纯体验优化
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
         //配置访问`/swagger-ui/`路径时可以直接跳转到`/swagger-ui/index.html`

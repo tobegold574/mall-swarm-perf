@@ -11,13 +11,18 @@ import org.springframework.stereotype.Component;
 /**
  * 取消订单消息的处理者
  * Created by macro on 2018/9/14.
+ * 
+ * 默认 AUTO 模式
+ * 方法正常返回 自动 ACK
+ * 方法抛出异常 NACK 返回队列（理论上可能导致毒消息死循环，当前场景无此问题）
  */
 @Component
-@RabbitListener(queues = "mall.order.cancel")
+@RabbitListener(queues = "mall.order.cancel")       // 声明是消费者（生产确认没有配） 订阅指定队列
 public class CancelOrderReceiver {
     private static Logger LOGGER =LoggerFactory.getLogger(CancelOrderReceiver.class);
     @Autowired
     private OmsPortalOrderService portalOrderService;
+    // 消费者
     @RabbitHandler
     public void handle(Long orderId){
         portalOrderService.cancelOrder(orderId);

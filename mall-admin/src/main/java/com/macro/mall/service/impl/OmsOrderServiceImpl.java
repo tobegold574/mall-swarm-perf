@@ -3,7 +3,10 @@ package com.macro.mall.service.impl;
 import com.github.pagehelper.PageHelper;
 import com.macro.mall.dao.OmsOrderDao;
 import com.macro.mall.dao.OmsOrderOperateHistoryDao;
+
+// 省事，并且实际字节码不会带有所有 DTO，不会全部进入内存
 import com.macro.mall.dto.*;
+
 import com.macro.mall.mapper.OmsOrderMapper;
 import com.macro.mall.mapper.OmsOrderOperateHistoryMapper;
 import com.macro.mall.model.OmsOrder;
@@ -41,9 +44,10 @@ public class OmsOrderServiceImpl implements OmsOrderService {
     @Override
     public int delivery(List<OmsOrderDeliveryParam> deliveryParamList) {
         //批量发货
+        // 一条数据库内定义好的批量更新的 sql（手写 DAO）
         int count = orderDao.delivery(deliveryParamList);
         //添加操作记录
-        List<OmsOrderOperateHistory> operateHistoryList = deliveryParamList.stream()
+        List<OmsOrderOperateHistory> operateHistoryList = deliveryParamList.stream()    // 声明式 性能开销 可组合
                 .map(omsOrderDeliveryParam -> {
                     OmsOrderOperateHistory history = new OmsOrderOperateHistory();
                     history.setOrderId(omsOrderDeliveryParam.getOrderId());
@@ -52,7 +56,8 @@ public class OmsOrderServiceImpl implements OmsOrderService {
                     history.setOrderStatus(2);
                     history.setNote("完成发货");
                     return history;
-                }).collect(Collectors.toList());
+                }).collect(Collectors.toList());    // 收集成写列表
+        // 手写 sql
         orderOperateHistoryDao.insertList(operateHistoryList);
         return count;
     }
@@ -105,6 +110,7 @@ public class OmsOrderServiceImpl implements OmsOrderService {
         order.setModifyTime(new Date());
         int count = orderMapper.updateByPrimaryKeySelective(order);
         //插入操作记录
+        // 属于业务流水
         OmsOrderOperateHistory history = new OmsOrderOperateHistory();
         history.setOrderId(receiverInfoParam.getOrderId());
         history.setCreateTime(new Date());

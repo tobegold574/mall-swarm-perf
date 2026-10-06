@@ -10,6 +10,7 @@ import java.util.List;
 /**
  * 会员关注Repository
  * Created by macro on 2018/8/2.
+ * Spring Data 直接推导方法名为方法
  */
 public interface MemberBrandAttentionRepository extends MongoRepository<MemberBrandAttention,String> {
     MemberBrandAttention findByMemberIdAndBrandId(Long memberId, Long brandId);

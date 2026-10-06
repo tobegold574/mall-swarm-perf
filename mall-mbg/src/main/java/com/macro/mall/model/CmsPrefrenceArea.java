@@ -1,6 +1,18 @@
 package com.macro.mall.model;
 
+/**
+ * 给前端生成接口文档的注解
+ * dev-v2 时代是 io.swagger.annotations.ApiModelProperty(value = "...")
+ * master 用 OpenAPI 3（springdoc），生成的是 io.swagger.v3.oas.annotations.media.Schema，形态为 @Schema(title = "...")
+ * 注意：本文件由 MBG 自动生成，重新运行 Generator 会覆盖这里的注释
+ */
 import io.swagger.v3.oas.annotations.media.Schema;
+
+/**
+ * 标记接口（Marker Interface）
+ * 实现了代表可以被序列化
+ * 未实现在写入网络/硬盘时会报 NotSerializableException
+*/
 import java.io.Serializable;
 
 public class CmsPrefrenceArea implements Serializable {

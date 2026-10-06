@@ -118,6 +118,7 @@ public class HomeServiceImpl implements HomeService {
                     homeFlashPromotion.setNextEndTime(nextSession.getEndTime());
                 }
                 //获取秒杀商品
+                // 活动-场次-商品三个秒杀分层
                 List<FlashPromotionProduct> flashProductList = homeDao.getFlashProductList(flashPromotion.getId(), flashPromotionSession.getId());
                 homeFlashPromotion.setProductList(flashProductList);
             }

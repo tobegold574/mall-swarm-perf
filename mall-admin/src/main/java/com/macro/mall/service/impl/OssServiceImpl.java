@@ -90,6 +90,7 @@ public class OssServiceImpl implements OssService {
 	public OssCallbackResult callback(HttpServletRequest request) {
 		OssCallbackResult result= new OssCallbackResult();
 		String filename = request.getParameter("filename");
+		// 只做文件名路径拼接
 		filename = "http://".concat(ALIYUN_OSS_BUCKET_NAME).concat(".").concat(ALIYUN_OSS_ENDPOINT).concat("/").concat(filename);
 		result.setFilename(filename);
 		result.setSize(request.getParameter("size"));

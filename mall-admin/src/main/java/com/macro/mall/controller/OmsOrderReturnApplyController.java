@@ -2,10 +2,16 @@ package com.macro.mall.controller;
 
 import com.macro.mall.common.api.CommonPage;
 import com.macro.mall.common.api.CommonResult;
+// 收货地址
 import com.macro.mall.dto.OmsOrderReturnApplyResult;
+// 查询参数
 import com.macro.mall.dto.OmsReturnApplyQueryParam;
+// 确认收货参数
 import com.macro.mall.dto.OmsUpdateStatusParam;
+
+// 三个 dto 对应一个 model
 import com.macro.mall.model.OmsOrderReturnApply;
+// 
 import com.macro.mall.service.OmsOrderReturnApplyService;
 
 import io.swagger.v3.oas.annotations.Operation;

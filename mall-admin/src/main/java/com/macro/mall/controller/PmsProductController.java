@@ -2,8 +2,11 @@ package com.macro.mall.controller;
 
 import com.macro.mall.common.api.CommonPage;
 import com.macro.mall.common.api.CommonResult;
+// 创建和修改商品的参数
 import com.macro.mall.dto.PmsProductParam;
+// 查询的参数
 import com.macro.mall.dto.PmsProductQueryParam;
+// 修改的结果
 import com.macro.mall.dto.PmsProductResult;
 import com.macro.mall.model.PmsProduct;
 import com.macro.mall.service.PmsProductService;

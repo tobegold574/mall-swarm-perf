@@ -1,6 +1,7 @@
 package com.macro.mall.service.impl;
 
 import cn.dev33.satoken.stp.SaTokenInfo;
+// 从 ThreadLocal 拿当前请求上下文
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
@@ -70,12 +71,14 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         UmsAdmin umsAdmin = new UmsAdmin();
         BeanUtils.copyProperties(umsAdminParam, umsAdmin);
         umsAdmin.setCreateTime(new Date());
+        // 启用
         umsAdmin.setStatus(1);
         //查询是否有相同用户名的用户
         UmsAdminExample example = new UmsAdminExample();
         example.createCriteria().andUsernameEqualTo(umsAdmin.getUsername());
         List<UmsAdmin> umsAdminList = adminMapper.selectByExample(example);
         if (umsAdminList.size() > 0) {
+            // 上层逻辑判空会转成通用失败响应
             return null;
         }
         //将密码进行加密操作
@@ -105,7 +108,9 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         UserDto userDto = new UserDto();
         userDto.setId(admin.getId());
         userDto.setUsername(admin.getUsername());
+        // 管理后台/前端商城，无影响，通过路径进行鉴权分流
         userDto.setClientId(AuthConstant.ADMIN_CLIENT_ID);
+        // 有哪些权限点
         List<UmsResource> resourceList = getResourceList(admin.getId());
         List<String> permissionList = resourceList.stream().map(item -> item.getId() + ":" + item.getName()).toList();
         userDto.setPermissionList(permissionList);
@@ -113,7 +118,6 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         StpUtil.getSession().set(AuthConstant.STP_ADMIN_INFO,userDto);
         // 获取当前登录用户Token信息
         SaTokenInfo saTokenInfo = StpUtil.getTokenInfo();
-//        updateLoginTimeByUsername(username);
         insertLoginLog(admin);
         return saTokenInfo;
     }
@@ -126,14 +130,17 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         UmsAdminLoginLog loginLog = new UmsAdminLoginLog();
         loginLog.setAdminId(admin.getId());
         loginLog.setCreateTime(new Date());
+        // 不会泄露密码，因为只取 IP
+        // 其实是从 ThreadLocal 取的，Tomcat 分配工作线程->Spring mvc 包装并放入线程内
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         HttpServletRequest request = attributes.getRequest();
+        // 仅纳入业务审计表，防爆破只有 BCrypt 慢哈希
         loginLog.setIp(request.getRemoteAddr());
         loginLogMapper.insert(loginLog);
     }
 
     /**
-     * 根据用户名修改登录时间
+     * 根据用户名修改登录时间（上次登录时间）
      */
     private void updateLoginTimeByUsername(String username) {
         UmsAdmin record = new UmsAdmin();
@@ -160,6 +167,7 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         return adminMapper.selectByExample(example);
     }
 
+    // selective 更新 即不碰 null
     @Override
     public int update(Long id, UmsAdmin admin) {
         admin.setId(id);
@@ -176,6 +184,7 @@ public class UmsAdminServiceImpl implements UmsAdminService {
             }
         }
         int count = adminMapper.updateByPrimaryKeySelective(admin);
+        // 角色变了，旧缓存失效
         adminCacheService.delAdmin(id);
         return count;
     }
@@ -183,6 +192,7 @@ public class UmsAdminServiceImpl implements UmsAdminService {
     @Override
     public int delete(Long id) {
         int count = adminMapper.deleteByPrimaryKey(id);
+        // 清缓存
         adminCacheService.delAdmin(id);
         return count;
     }
@@ -218,6 +228,7 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         return adminRoleRelationDao.getResourceList(adminId);
     }
 
+    // -1 -2 -3 在 controller 层面转义
     @Override
     public int updatePassword(UpdateAdminPasswordParam param) {
         if(StrUtil.isEmpty(param.getUsername())
@@ -237,6 +248,7 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         }
         umsAdmin.setPassword(BCrypt.hashpw(param.getNewPassword()));
         adminMapper.updateByPrimaryKey(umsAdmin);
+        // 清缓存
         adminCacheService.delAdmin(umsAdmin.getId());
         return 1;
     }
@@ -244,7 +256,9 @@ public class UmsAdminServiceImpl implements UmsAdminService {
     @Override
     public UmsAdmin getCurrentAdmin() {
         UserDto userDto = (UserDto) StpUtil.getSession().get(AuthConstant.STP_ADMIN_INFO);
+        // 先查缓存
         UmsAdmin admin = adminCacheService.getAdmin(userDto.getId());
+        // 未命中查库回填
         if (admin == null) {
             admin = adminMapper.selectByPrimaryKey(userDto.getId());
             adminCacheService.setAdmin(admin);
@@ -255,6 +269,7 @@ public class UmsAdminServiceImpl implements UmsAdminService {
     public void logout() {
         //先清空缓存
         UserDto userDto = (UserDto) StpUtil.getSession().get(AuthConstant.STP_ADMIN_INFO);
+        // 清缓存
         adminCacheService.delAdmin(userDto.getId());
         //再调用sa-token的登出方法
         StpUtil.logout();

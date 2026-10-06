@@ -41,6 +41,7 @@ public class OmsOrderReturnApplyServiceImpl implements OmsOrderReturnApplyServic
     @Override
     public int updateStatus(Long id, OmsUpdateStatusParam statusParam) {
         Integer status = statusParam.getStatus();
+        // 自审计，所以不需要加流水记录
         OmsOrderReturnApply returnApply = new OmsOrderReturnApply();
         if(status.equals(1)){
             //确认退货

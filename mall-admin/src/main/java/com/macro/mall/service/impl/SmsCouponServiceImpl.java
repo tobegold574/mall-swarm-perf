@@ -36,19 +36,30 @@ public class SmsCouponServiceImpl implements SmsCouponService {
     private SmsCouponDao couponDao;
     @Override
     public int create(SmsCouponParam couponParam) {
+        // 剩余可用数
         couponParam.setCount(couponParam.getPublishCount());
+        // 已使用
         couponParam.setUseCount(0);
+        // 已领取
         couponParam.setReceiveCount(0);
         //插入优惠券表
         int count = couponMapper.insert(couponParam);
-        //插入优惠券和商品关系表
+
+        /**
+         * useType 
+         * 0 全场通用券
+         * 1 限定分类券
+         * 2 限定商品券
+         * 上述互斥
+         */
+        // 只和商品有关系
         if(couponParam.getUseType().equals(2)){
             for(SmsCouponProductRelation productRelation:couponParam.getProductRelationList()){
                 productRelation.setCouponId(couponParam.getId());
             }
             productRelationDao.insertList(couponParam.getProductRelationList());
         }
-        //插入优惠券和商品分类关系表
+        // 和某一类有关系
         if(couponParam.getUseType().equals(1)){
             for (SmsCouponProductCategoryRelation couponProductCategoryRelation : couponParam.getProductCategoryRelationList()) {
                 couponProductCategoryRelation.setCouponId(couponParam.getId());
@@ -81,6 +92,9 @@ public class SmsCouponServiceImpl implements SmsCouponService {
         productRelationMapper.deleteByExample(productRelationExample);
     }
 
+    /**
+     * 先删后插入
+     */
     @Override
     public int update(Long id, SmsCouponParam couponParam) {
         couponParam.setId(id);

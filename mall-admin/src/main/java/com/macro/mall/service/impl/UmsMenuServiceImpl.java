@@ -68,6 +68,7 @@ public class UmsMenuServiceImpl implements UmsMenuService {
     public List<UmsMenu> list(Long parentId, Integer pageSize, Integer pageNum) {
         PageHelper.startPage(pageNum, pageSize);
         UmsMenuExample example = new UmsMenuExample();
+        // 只是配合前端使用习惯
         example.setOrderByClause("sort desc");
         example.createCriteria().andParentIdEqualTo(parentId);
         return menuMapper.selectByExample(example);
@@ -76,6 +77,7 @@ public class UmsMenuServiceImpl implements UmsMenuService {
     @Override
     public List<UmsMenuNode> treeList() {
         List<UmsMenu> menuList = menuMapper.selectByExample(new UmsMenuExample());
+        // 取根菜单，每个根递归长成子树
         List<UmsMenuNode> result = menuList.stream()
                 .filter(menu -> menu.getParentId().equals(0L))
                 .map(menu -> covertMenuNode(menu, menuList)).collect(Collectors.toList());
@@ -97,6 +99,7 @@ public class UmsMenuServiceImpl implements UmsMenuService {
         UmsMenuNode node = new UmsMenuNode();
         BeanUtils.copyProperties(menu, node);
         List<UmsMenuNode> children = menuList.stream()
+                // 支持嵌套
                 .filter(subMenu -> subMenu.getParentId().equals(menu.getId()))
                 .map(subMenu -> covertMenuNode(subMenu, menuList)).collect(Collectors.toList());
         node.setChildren(children);

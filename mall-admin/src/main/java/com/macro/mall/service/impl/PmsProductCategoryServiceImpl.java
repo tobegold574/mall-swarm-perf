@@ -36,15 +36,20 @@ public class PmsProductCategoryServiceImpl implements PmsProductCategoryService 
     private PmsProductCategoryDao productCategoryDao;
     @Override
     public int create(PmsProductCategoryParam pmsProductCategoryParam) {
+        // 创建新属性实体
         PmsProductCategory productCategory = new PmsProductCategory();
+        // 初始化冗余计数器为 0
         productCategory.setProductCount(0);
+        // 名字、父分类、id等等字段从 Param 批量抄入
         BeanUtils.copyProperties(pmsProductCategoryParam, productCategory);
-        //没有父分类时为一级分类
+        // 推导分类层级
         setCategoryLevel(productCategory);
+        // 落库（新的主键会自动回填回对象）
         int count = productCategoryMapper.insertSelective(productCategory);
-        //创建筛选属性关联
+        // 创建筛选属性关联
         List<Long> productAttributeIdList = pmsProductCategoryParam.getProductAttributeIdList();
         if(!CollectionUtils.isEmpty(productAttributeIdList)){
+            // 挂筛选属性
             insertRelationList(productCategory.getId(), productAttributeIdList);
         }
         return count;
@@ -58,6 +63,7 @@ public class PmsProductCategoryServiceImpl implements PmsProductCategoryService 
     private void insertRelationList(Long productCategoryId, List<Long> productAttributeIdList) {
         List<PmsProductCategoryAttributeRelation> relationList = new ArrayList<>();
         for (Long productAttrId : productAttributeIdList) {
+            // 一个空关联对象，调用两次 setter，没别的复杂的
             PmsProductCategoryAttributeRelation relation = new PmsProductCategoryAttributeRelation();
             relation.setProductAttributeId(productAttrId);
             relation.setProductCategoryId(productCategoryId);
@@ -74,11 +80,14 @@ public class PmsProductCategoryServiceImpl implements PmsProductCategoryService 
         setCategoryLevel(productCategory);
         //更新商品分类时要更新商品中的名称
         PmsProduct product = new PmsProduct();
+        // 冗余列更新，避免重复联表查询
         product.setProductCategoryName(productCategory.getName());
         PmsProductExample example = new PmsProductExample();
         example.createCriteria().andProductCategoryIdEqualTo(id);
+        // 落库
         productMapper.updateByExampleSelective(product,example);
         //同时更新筛选属性的信息
+        // 有则删除后插入，无则直接全部删除
         if(!CollectionUtils.isEmpty(pmsProductCategoryParam.getProductAttributeIdList())){
             PmsProductCategoryAttributeRelationExample relationExample = new PmsProductCategoryAttributeRelationExample();
             relationExample.createCriteria().andProductCategoryIdEqualTo(id);
@@ -136,6 +145,7 @@ public class PmsProductCategoryServiceImpl implements PmsProductCategoryService 
 
     /**
      * 根据分类的parentId设置分类的level
+     * 多叉树，按照业务划分最多 2 级
      */
     private void setCategoryLevel(PmsProductCategory productCategory) {
         //没有父分类时为一级分类

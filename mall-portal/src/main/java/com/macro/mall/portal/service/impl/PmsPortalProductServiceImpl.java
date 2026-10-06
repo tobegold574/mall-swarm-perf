@@ -73,6 +73,7 @@ public class PmsPortalProductServiceImpl implements PmsPortalProductService {
     public List<PmsProductCategoryNode> categoryTreeList() {
         PmsProductCategoryExample example = new PmsProductCategoryExample();
         List<PmsProductCategory> allList = productCategoryMapper.selectByExample(example);
+        // 又是递归构造树
         List<PmsProductCategoryNode> result = allList.stream()
                 .filter(item -> item.getParentId().equals(0L))
                 .map(item -> covert(item, allList)).collect(Collectors.toList());

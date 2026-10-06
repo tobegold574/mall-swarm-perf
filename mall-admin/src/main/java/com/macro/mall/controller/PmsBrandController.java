@@ -2,14 +2,18 @@ package com.macro.mall.controller;
 
 import com.macro.mall.common.api.CommonPage;
 import com.macro.mall.common.api.CommonResult;
+
+// 品牌相关
 import com.macro.mall.dto.PmsBrandParam;
 import com.macro.mall.model.PmsBrand;
+
 import com.macro.mall.service.PmsBrandService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+// 触发开关，会拿规则标签（如 @NotEmpty）进行校验 hibernate validator实现
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 

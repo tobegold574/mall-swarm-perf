@@ -77,11 +77,15 @@ public class UmsResourceServiceImpl implements UmsResourceService {
 
     @Override
     public Map<String,String> initPathResourceMap() {
+        // 迭代顺序稳定
         Map<String,String> pathResourceMap = new TreeMap<>();
         List<UmsResource> resourceList = resourceMapper.selectByExample(new UmsResourceExample());
         for (UmsResource resource : resourceList) {
+            // key 完整请求路径（以网关视角建表，所以要带上 applicationName）
+            // value 资源标识（ id 用于防止不同类别权限重名）
             pathResourceMap.put("/"+applicationName+resource.getUrl(),resource.getId()+":"+resource.getName());
         }
+        // 先删再整包写，保证一致
         redisService.del(AuthConstant.PATH_RESOURCE_MAP);
         redisService.hSetAll(AuthConstant.PATH_RESOURCE_MAP, pathResourceMap);
         return pathResourceMap;

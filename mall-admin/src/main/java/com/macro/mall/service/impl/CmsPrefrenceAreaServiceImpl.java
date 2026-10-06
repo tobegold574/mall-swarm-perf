@@ -4,7 +4,9 @@ import com.macro.mall.mapper.CmsPrefrenceAreaMapper;
 import com.macro.mall.model.CmsPrefrenceArea;
 import com.macro.mall.model.CmsPrefrenceAreaExample;
 import com.macro.mall.service.CmsPrefrenceAreaService;
+// Autowired 不属于 stereotype
 import org.springframework.beans.factory.annotation.Autowired;
+// Service 属于 stereotype
 import org.springframework.stereotype.Service;
 
 import java.util.List;

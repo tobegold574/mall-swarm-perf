@@ -1,5 +1,6 @@
 package com.macro.mall.service.impl;
 
+// 集合管理
 import cn.hutool.core.collection.CollUtil;
 import com.github.pagehelper.PageHelper;
 import com.macro.mall.dao.*;
@@ -94,10 +95,15 @@ public class PmsProductServiceImpl implements PmsProductService {
         return count;
     }
 
+    /**
+     * Stock Keeping Unit 库存量单位
+     * 直接 set，不论插入还是更新
+     */ 
     private void handleSkuStockCode(List<PmsSkuStock> skuStockList, Long productId) {
         if(CollectionUtils.isEmpty(skuStockList))return;
         for(int i=0;i<skuStockList.size();i++){
             PmsSkuStock skuStock = skuStockList.get(i);
+            // 创建新的 SKU 编码
             if(StringUtils.isEmpty(skuStock.getSkuCode())){
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
                 StringBuilder sb = new StringBuilder();
@@ -117,12 +123,18 @@ public class PmsProductServiceImpl implements PmsProductService {
         return productDao.getUpdateInfo(id);
     }
 
+    /**    
+     * 前端全量提交，后端批量删除后完整插入
+     * 6组重复逻辑：创建条件容器->设定条件->删掉该商品全部旧关联->全量插入前端传来的新关联
+     * 1组 sku 分三个不同状态，实际与6组关联表更新是同理的
+     */
     @Override
     public int update(Long id, PmsProductParam productParam) {
         int count;
         //更新商品信息
         PmsProduct product = productParam;
         product.setId(id);
+        // 选择性更新，只把非 null 字段拼入 sql
         productMapper.updateByPrimaryKeySelective(product);
         //会员价格
         PmsMemberPriceExample pmsMemberPriceExample = new PmsMemberPriceExample();
@@ -160,41 +172,53 @@ public class PmsProductServiceImpl implements PmsProductService {
         return count;
     }
 
+    /**
+     * 处理 Java 层面的 sku 更新以及数据库层面的更新
+     * @param id
+     * @param productParam
+     */
     private void handleUpdateSkuStockList(Long id, PmsProductParam productParam) {
-        //当前的sku信息
+        // 前端提交的 sku 状态信息
         List<PmsSkuStock> currSkuList = productParam.getSkuStockList();
-        //当前没有sku直接删除
+        // 前端提交的列表为空，代表用户想要删除所有 sku 信息，更新数据
         if(CollUtil.isEmpty(currSkuList)){
             PmsSkuStockExample skuStockExample = new PmsSkuStockExample();
             skuStockExample.createCriteria().andProductIdEqualTo(id);
             skuStockMapper.deleteByExample(skuStockExample);
             return;
         }
-        //获取初始sku信息
+
+        // 获取初始 sku 信息
+        // 先建立条件容器并进行搜索
         PmsSkuStockExample skuStockExample = new PmsSkuStockExample();
         skuStockExample.createCriteria().andProductIdEqualTo(id);
         List<PmsSkuStock> oriStuList = skuStockMapper.selectByExample(skuStockExample);
-        //获取新增sku信息
+
+        // 前端提交的列表的 id 为空的数据，获取需要更新的信息
+        // 主键非 null，即之前没有的，为更新插入
         List<PmsSkuStock> insertSkuList = currSkuList.stream().filter(item->item.getId()==null).collect(Collectors.toList());
-        //获取需要更新的sku信息
+        // id 非空的数据，需要的是更新而不是插入
         List<PmsSkuStock> updateSkuList = currSkuList.stream().filter(item->item.getId()!=null).collect(Collectors.toList());
         List<Long> updateSkuIds = updateSkuList.stream().map(PmsSkuStock::getId).collect(Collectors.toList());
-        //获取需要删除的sku信息
+        // 获取前端提交列表中不存在的那些条目，即为需要删除的数据
         List<PmsSkuStock> removeSkuList = oriStuList.stream().filter(item-> !updateSkuIds.contains(item.getId())).collect(Collectors.toList());
+        // 两个不同分类的数据通过相同的 setter 逻辑进行更新 
         handleSkuStockCode(insertSkuList,id);
         handleSkuStockCode(updateSkuList,id);
-        //新增sku
+        
+        // 数据库层面的三种类型的更新
+        // 插入 sku
         if(CollUtil.isNotEmpty(insertSkuList)){
             relateAndInsertList(skuStockDao, insertSkuList, id);
         }
-        //删除sku
+        // 删除 sku
         if(CollUtil.isNotEmpty(removeSkuList)){
             List<Long> removeSkuIds = removeSkuList.stream().map(PmsSkuStock::getId).collect(Collectors.toList());
             PmsSkuStockExample removeExample = new PmsSkuStockExample();
             removeExample.createCriteria().andIdIn(removeSkuIds);
             skuStockMapper.deleteByExample(removeExample);
         }
-        //修改sku
+        // 修改 sku
         if(CollUtil.isNotEmpty(updateSkuList)){
             for (PmsSkuStock pmsSkuStock : updateSkuList) {
                 skuStockMapper.updateByPrimaryKeySelective(pmsSkuStock);
@@ -203,6 +227,9 @@ public class PmsProductServiceImpl implements PmsProductService {
 
     }
 
+    /**
+     * 分页获取数据
+     */
     @Override
     public List<PmsProduct> list(PmsProductQueryParam productQueryParam, Integer pageSize, Integer pageNum) {
         PageHelper.startPage(pageNum, pageSize);
@@ -230,6 +257,9 @@ public class PmsProductServiceImpl implements PmsProductService {
         return productMapper.selectByExample(productExample);
     }
 
+    /**
+     * 更新审核状态
+     */
     @Override
     public int updateVerifyStatus(List<Long> ids, Integer verifyStatus, String detail) {
         PmsProduct product = new PmsProduct();
@@ -252,6 +282,9 @@ public class PmsProductServiceImpl implements PmsProductService {
         return count;
     }
 
+    /**
+     * 更新发布状态
+     */
     @Override
     public int updatePublishStatus(List<Long> ids, Integer publishStatus) {
         PmsProduct record = new PmsProduct();
@@ -261,6 +294,9 @@ public class PmsProductServiceImpl implements PmsProductService {
         return productMapper.updateByExampleSelective(record, example);
     }
 
+    /**
+     * 更新推荐状态
+     */
     @Override
     public int updateRecommendStatus(List<Long> ids, Integer recommendStatus) {
         PmsProduct record = new PmsProduct();
@@ -270,6 +306,9 @@ public class PmsProductServiceImpl implements PmsProductService {
         return productMapper.updateByExampleSelective(record, example);
     }
 
+    /**
+     * 是否为新品
+     */
     @Override
     public int updateNewStatus(List<Long> ids, Integer newStatus) {
         PmsProduct record = new PmsProduct();
@@ -279,6 +318,9 @@ public class PmsProductServiceImpl implements PmsProductService {
         return productMapper.updateByExampleSelective(record, example);
     }
 
+    /**
+     * 是否删除（逻辑删除）
+     */
     @Override
     public int updateDeleteStatus(List<Long> ids, Integer deleteStatus) {
         PmsProduct record = new PmsProduct();
@@ -288,6 +330,9 @@ public class PmsProductServiceImpl implements PmsProductService {
         return productMapper.updateByExampleSelective(record, example);
     }
 
+    /**
+     * 模糊搜索
+     */
     @Override
     public List<PmsProduct> list(String keyword) {
         PmsProductExample productExample = new PmsProductExample();
@@ -309,10 +354,15 @@ public class PmsProductServiceImpl implements PmsProductService {
      */
     private void relateAndInsertList(Object dao, List dataList, Long productId) {
         try {
+            // 空列表直接返回
             if (CollectionUtils.isEmpty(dataList)) return;
             for (Object item : dataList) {
+                // 按名字和参数类型在运行期捞出方法对象
+                // id 为关联表自己的主键
                 Method setId = item.getClass().getMethod("setId", Long.class);
+                // 主键置 null，前端传的数据可能是原有数据的主键，需要删掉原主键避免重复，让 mysql 自动分配新主键
                 setId.invoke(item, (Long) null);
+                // productId 外键 即当前数据挂在哪个商品下面
                 Method setProductId = item.getClass().getMethod("setProductId", Long.class);
                 setProductId.invoke(item, productId);
             }

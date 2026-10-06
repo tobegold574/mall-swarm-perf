@@ -1,6 +1,17 @@
 package com.macro.mall.common.api;
 
+/** 
+ * PageHelper 插件提供的分页结果容器
+ * 实现 Mybatis 的 Interceptor 接口
+ * 拦截 Executor.query -> 按方言改写 SQL -> 需要总数时先执行 count -> 把返回的 list 转换为自己的 Page子类
+ * 主要解决总数查询和不同数据库方言不同的问题
+*/
 import com.github.pagehelper.PageInfo;
+/**
+ * Spring Data 的分页结果接口
+ * 负责对接 ElasticSearch / MongoDB / JPA
+ * 
+ */
 import org.springframework.data.domain.Page;
 
 import java.util.List;

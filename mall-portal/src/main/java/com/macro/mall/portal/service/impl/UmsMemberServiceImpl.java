@@ -51,6 +51,7 @@ public class UmsMemberServiceImpl implements UmsMemberService {
         example.createCriteria().andUsernameEqualTo(username);
         List<UmsMember> memberList = memberMapper.selectByExample(example);
         if (!CollectionUtils.isEmpty(memberList)) {
+            // 用户名唯一
             return memberList.get(0);
         }
         return null;
@@ -112,7 +113,7 @@ public class UmsMemberServiceImpl implements UmsMemberService {
         if(CollectionUtils.isEmpty(memberList)){
             Asserts.fail("该账号不存在");
         }
-        //验证验证码
+        // 验证验证码
         if(!verifyAuthCode(authCode,telephone)){
             Asserts.fail("验证码错误");
         }
@@ -135,11 +136,13 @@ public class UmsMemberServiceImpl implements UmsMemberService {
         }
     }
 
+    // 下单用积分抵扣
     @Override
     public void updateIntegration(Long id, Integer integration) {
         UmsMember record=new UmsMember();
         record.setId(id);
         record.setIntegration(integration);
+        // selective 更新
         memberMapper.updateByPrimaryKeySelective(record);
         memberCacheService.delMember(id);
     }
@@ -166,6 +169,7 @@ public class UmsMemberServiceImpl implements UmsMemberService {
         userDto.setUsername(member.getUsername());
         userDto.setClientId(AuthConstant.PORTAL_CLIENT_ID);
         // 将用户信息存储到Session中
+        // 注意与 authcode 的短 TTL 不同，这个是七天的
         StpMemberUtil.getSession().set(AuthConstant.STP_MEMBER_INFO,userDto);
         // 获取当前登录用户Token信息
         return StpMemberUtil.getTokenInfo();
@@ -180,7 +184,7 @@ public class UmsMemberServiceImpl implements UmsMemberService {
         StpMemberUtil.logout();
     }
 
-    //对输入的验证码进行校验
+    // 对输入的验证码进行校验（数据在 redis 里面）
     private boolean verifyAuthCode(String authCode, String telephone){
         if(StringUtils.isEmpty(authCode)){
             return false;

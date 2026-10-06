@@ -32,8 +32,12 @@ public class PmsSkuStockServiceImpl implements PmsSkuStockService {
         return skuStockMapper.selectByExample(example);
     }
 
+    /**
+     * @param pid 参数完全没有用到，demo简化 完全相信前端的数据，
+     */
     @Override
     public int update(Long pid, List<PmsSkuStock> skuStockList) {
+        // replace = 逐条 delete + insert（换新的主键）
         return skuStockDao.replaceList(skuStockList);
     }
 }

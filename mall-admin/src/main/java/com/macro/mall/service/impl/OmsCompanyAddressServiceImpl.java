@@ -19,6 +19,7 @@ public class OmsCompanyAddressServiceImpl implements OmsCompanyAddressService {
     private OmsCompanyAddressMapper companyAddressMapper;
     @Override
     public List<OmsCompanyAddress> list() {
+        // 返回自动生成的示例数据
         return companyAddressMapper.selectByExample(new OmsCompanyAddressExample());
     }
 }

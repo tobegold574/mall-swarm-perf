@@ -1,7 +1,9 @@
 package com.macro.mall.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+// setter/getter 全家桶
 import lombok.Data;
+// 生成 equals() 和 hashCode() 两个方法
 import lombok.EqualsAndHashCode;
 
 /**
