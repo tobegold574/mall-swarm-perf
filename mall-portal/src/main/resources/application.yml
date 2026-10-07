@@ -38,7 +38,7 @@ spring:
     virtual-host: /mall
     username: mall
     password: mall
-mybatis:
+mybatis-plus:
   mapper-locations:
     - classpath:dao/*.xml
     - classpath*:com/**/mapper/*.xml

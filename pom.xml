@@ -47,7 +47,8 @@
         <hutool.version>5.8.40</hutool.version>
         <mybatis-generator.version>1.4.2</mybatis-generator.version>
         <mybatis.version>3.5.19</mybatis.version>
-        <mybatis-spring-boot-starter.version>4.1.0</mybatis-spring-boot-starter.version>
+        <mybatis-plus.version>3.5.17</mybatis-plus.version>
+        <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <mysql-connector.version>9.3.0</mysql-connector.version>
         <aliyun-oss.version>3.18.5</aliyun-oss.version>
         <alipay-sdk.version>4.40.630.ALL</alipay-sdk.version>
@@ -134,11 +135,11 @@
                 <artifactId>pagehelper</artifactId>
                 <version>${pagehelper.version}</version>
             </dependency>
-            <!--MyBatis的Starter依赖-->
+            <!--MyBatis-Plus的Starter依赖-->
             <dependency>
-                <groupId>org.mybatis.spring.boot</groupId>
-                <artifactId>mybatis-spring-boot-starter</artifactId>
-                <version>${mybatis-spring-boot-starter.version}</version>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
             </dependency>
             <!--集成druid连接池（SB4 无官方 starter，改为 mall-mbg 手动装配）-->
             <dependency>
