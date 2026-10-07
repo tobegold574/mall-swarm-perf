@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -74,7 +75,7 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         umsAdmin.setCreateTime(new Date());
         // 启用
         umsAdmin.setStatus(1);
-        //查询是否有相同用户名的用户
+        //查询是否有相同用户名的用户（快速失败；并发正确性由 ums_admin.username 唯一索引兜底）
         List<UmsAdmin> umsAdminList = adminMapper.selectList(new LambdaQueryWrapper<UmsAdmin>()
                 .eq(UmsAdmin::getUsername, umsAdmin.getUsername()));
         if (umsAdminList.size() > 0) {
@@ -84,7 +85,12 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         //将密码进行加密操作
         String encodePassword = BCrypt.hashpw(umsAdmin.getPassword());
         umsAdmin.setPassword(encodePassword);
-        adminMapper.insert(umsAdmin);
+        try {
+            adminMapper.insert(umsAdmin);
+        } catch (DuplicateKeyException e) {
+            // 并发注册同名用户：唯一索引 uk_username 原子兜底
+            return null;
+        }
         return umsAdmin;
     }
 
@@ -134,8 +140,14 @@ public class UmsAdminServiceImpl implements UmsAdminService {
         // 其实是从 ThreadLocal 取的，Tomcat 分配工作线程->Spring mvc 包装并放入线程内
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         HttpServletRequest request = attributes.getRequest();
-        // 仅纳入业务审计表，防爆破只有 BCrypt 慢哈希
-        loginLog.setIp(request.getRemoteAddr());
+        // 经反代场景优先取 X-Forwarded-For 首段，回退 remoteAddr
+        String ip = request.getHeader("X-Forwarded-For");
+        if (StrUtil.isBlank(ip) || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        } else {
+            ip = ip.split(",")[0].trim();
+        }
+        loginLog.setIp(ip);
         loginLogMapper.insert(loginLog);
     }
 

@@ -3,6 +3,7 @@ package com.macro.mall.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.github.pagehelper.PageHelper;
+import com.macro.mall.common.exception.Asserts;
 import com.macro.mall.dao.PmsProductCategoryAttributeRelationDao;
 import com.macro.mall.dao.PmsProductCategoryDao;
 import com.macro.mall.dto.PmsProductCategoryParam;
@@ -10,6 +11,7 @@ import com.macro.mall.dto.PmsProductCategoryWithChildrenItem;
 import com.macro.mall.mapper.PmsProductCategoryAttributeRelationMapper;
 import com.macro.mall.mapper.PmsProductCategoryMapper;
 import com.macro.mall.mapper.PmsProductMapper;
+import com.macro.mall.model.PmsProduct;
 import com.macro.mall.model.*;
 import com.macro.mall.service.PmsProductCategoryService;
 import org.springframework.util.CollectionUtils;
@@ -110,6 +112,14 @@ public class PmsProductCategoryServiceImpl implements PmsProductCategoryService 
 
     @Override
     public int delete(Long id) {
+        // 校验分类下是否仍有商品，有则禁止删除（原实现直接删，商品分类悬空）
+        Long productCount = productMapper.selectCount(
+                new LambdaQueryWrapper<PmsProduct>()
+                        .eq(PmsProduct::getProductCategoryId, id)
+                        .eq(PmsProduct::getDeleteStatus, 0));
+        if (productCount > 0) {
+            Asserts.fail("分类下存在商品，无法删除");
+        }
         return productCategoryMapper.deleteById(id);
     }
 

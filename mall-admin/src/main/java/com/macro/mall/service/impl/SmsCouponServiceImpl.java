@@ -14,6 +14,7 @@ import com.macro.mall.model.*;
 import com.macro.mall.service.SmsCouponService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
@@ -96,6 +97,7 @@ public class SmsCouponServiceImpl implements SmsCouponService {
      * 先删后插入
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int update(Long id, SmsCouponParam couponParam) {
         couponParam.setId(id);
         int count = couponMapper.update(null, new LambdaUpdateWrapper<SmsCoupon>()
@@ -115,12 +117,14 @@ public class SmsCouponServiceImpl implements SmsCouponService {
                 .set(SmsCoupon::getEnableTime, couponParam.getEnableTime())
                 .set(SmsCoupon::getCode, couponParam.getCode())
                 .set(SmsCoupon::getMemberLevel, couponParam.getMemberLevel()));
-        //删除后插入优惠券和商品关系表
+        //无论 useType 是否变更，先清理两类关联（原实现只清理新类型，旧类型关联残留），再按新 useType 重建
+        deleteProductRelation(id);
+        deleteProductCategoryRelation(id);
+        //插入优惠券和商品关系表
         if(couponParam.getUseType().equals(2)){
             for(SmsCouponProductRelation productRelation:couponParam.getProductRelationList()){
                 productRelation.setCouponId(couponParam.getId());
             }
-            deleteProductRelation(id);
             productRelationDao.insertList(couponParam.getProductRelationList());
         }
         //删除后插入优惠券和商品分类关系表
@@ -128,7 +132,6 @@ public class SmsCouponServiceImpl implements SmsCouponService {
             for (SmsCouponProductCategoryRelation couponProductCategoryRelation : couponParam.getProductCategoryRelationList()) {
                 couponProductCategoryRelation.setCouponId(couponParam.getId());
             }
-            deleteProductCategoryRelation(id);
             productCategoryRelationDao.insertList(couponParam.getProductCategoryRelationList());
         }
         return count;

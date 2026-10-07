@@ -10,8 +10,10 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -77,11 +79,11 @@ public class UmsMenuServiceImpl implements UmsMenuService {
     @Override
     public List<UmsMenuNode> treeList() {
         List<UmsMenu> menuList = menuMapper.selectList(new LambdaQueryWrapper<UmsMenu>());
-        // 取根菜单，每个根递归长成子树
-        List<UmsMenuNode> result = menuList.stream()
-                .filter(menu -> menu.getParentId().equals(0L))
-                .map(menu -> covertMenuNode(menu, menuList)).collect(Collectors.toList());
-        return result;
+        // 按 parentId 分组建树，O(n)（原实现每个节点全表过滤，O(n²)）
+        Map<Long, List<UmsMenu>> childrenMap = menuList.stream()
+                .collect(Collectors.groupingBy(UmsMenu::getParentId));
+        return childrenMap.getOrDefault(0L, new ArrayList<>()).stream()
+                .map(menu -> covertMenuNode(menu, childrenMap)).collect(Collectors.toList());
     }
 
     @Override
@@ -95,13 +97,12 @@ public class UmsMenuServiceImpl implements UmsMenuService {
     /**
      * 将UmsMenu转化为UmsMenuNode并设置children属性
      */
-    private UmsMenuNode covertMenuNode(UmsMenu menu, List<UmsMenu> menuList) {
+    private UmsMenuNode covertMenuNode(UmsMenu menu, Map<Long, List<UmsMenu>> childrenMap) {
         UmsMenuNode node = new UmsMenuNode();
         BeanUtils.copyProperties(menu, node);
-        List<UmsMenuNode> children = menuList.stream()
-                // 支持嵌套
-                .filter(subMenu -> subMenu.getParentId().equals(menu.getId()))
-                .map(subMenu -> covertMenuNode(subMenu, menuList)).collect(Collectors.toList());
+        List<UmsMenuNode> children = childrenMap.getOrDefault(menu.getId(), new ArrayList<>())
+                .stream()
+                .map(subMenu -> covertMenuNode(subMenu, childrenMap)).collect(Collectors.toList());
         node.setChildren(children);
         return node;
     }

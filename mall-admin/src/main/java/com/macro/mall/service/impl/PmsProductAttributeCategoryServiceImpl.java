@@ -2,9 +2,12 @@ package com.macro.mall.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.github.pagehelper.PageHelper;
+import com.macro.mall.common.exception.Asserts;
 import com.macro.mall.dao.PmsProductAttributeCategoryDao;
 import com.macro.mall.dto.PmsProductAttributeCategoryItem;
 import com.macro.mall.mapper.PmsProductAttributeCategoryMapper;
+import com.macro.mall.mapper.PmsProductAttributeMapper;
+import com.macro.mall.model.PmsProductAttribute;
 import com.macro.mall.model.PmsProductAttributeCategory;
 import com.macro.mall.service.PmsProductAttributeCategoryService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +25,8 @@ public class PmsProductAttributeCategoryServiceImpl implements PmsProductAttribu
     private PmsProductAttributeCategoryMapper productAttributeCategoryMapper;
     @Autowired
     private PmsProductAttributeCategoryDao productAttributeCategoryDao;
+    @Autowired
+    private PmsProductAttributeMapper productAttributeMapper;
 
     @Override
     public int create(String name) {
@@ -40,6 +45,13 @@ public class PmsProductAttributeCategoryServiceImpl implements PmsProductAttribu
 
     @Override
     public int delete(Long id) {
+        // 校验分类下是否仍有属性，有则禁止删除（原实现直接删，属性成孤儿）
+        Long attrCount = productAttributeMapper.selectCount(
+                new LambdaQueryWrapper<PmsProductAttribute>()
+                        .eq(PmsProductAttribute::getProductAttributeCategoryId, id));
+        if (attrCount > 0) {
+            Asserts.fail("分类下存在属性，无法删除");
+        }
         return productAttributeCategoryMapper.deleteById(id);
     }
 
