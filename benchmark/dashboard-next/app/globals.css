@@ -1,0 +1,49 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #fafafa;
+  color: #171717;
+  font-family: -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 28px 36px; }
+h1 { font-size: 20px; letter-spacing: 0.02em; font-weight: 650; }
+h2 { font-size: 16px; margin-top: 44px; padding-left: 10px; border-left: 3px solid #171717; font-weight: 600; }
+select, button {
+  background: #fff; color: #171717; border: 1px solid #d4d4d4;
+  border-radius: 6px; padding: 8px 12px; font-size: 14px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+select:hover, button:hover { border-color: #171717; }
+select:focus { outline: none; border-color: #171717; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; background: #fff; }
+th, td { border: 1px solid #e5e5e5; padding: 7px 10px; text-align: right; }
+th { background: #fafafa; color: #525252; font-weight: 600; }
+td:first-child, th:first-child { text-align: left; }
+tr { transition: background 0.15s ease; }
+tbody tr:hover { background: #f5f5f5; }
+.meta { color: #737373; font-size: 12px; }
+.theme { margin-top: 44px; animation: fadeUp 0.5s ease both; }
+.tagA, .tagB {
+  display: inline-block; padding: 3px 12px; margin: 6px 0;
+  font-size: 12px; border-radius: 4px; letter-spacing: 0.08em; font-weight: 600;
+}
+.tagA { background: #171717; color: #fff; }
+.tagB { background: #fff; color: #171717; border: 1px solid #171717; }
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 14px 0; }
+.card {
+  background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  animation: fadeUp 0.5s ease both;
+}
+.card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.07); }
+.card .v { font-size: 26px; font-weight: 700; color: #171717; }
+.card .l { font-size: 12px; color: #737373; margin-top: 3px; }
+.good { color: #15803d; }
+.bad { color: #b91c1c; }
+details { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 10px; margin: 8px 0; }
+summary { cursor: pointer; color: #171717; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}

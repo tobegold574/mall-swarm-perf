@@ -1,0 +1,248 @@
+name: docker
+
+x-java-env: &java-env
+  TZ: Asia/Shanghai
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+  SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "*"
+
+services:
+  mysql:
+    image: mysql:5.7
+    container_name: mall-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mall-mysql-data:/var/lib/mysql
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1g
+
+  redis:
+    image: redis:7
+    container_name: mall-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 400mb --maxmemory-policy noeviction
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+
+  nacos:
+    image: nacos/nacos-server:v2.5.4
+    container_name: mall-nacos
+    restart: unless-stopped
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    environment:
+      MODE: standalone
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+    volumes:
+      - mall-nacos-data:/home/nacos/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1536m
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: mall-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - mall-rabbitmq-data:/var/lib/rabbitmq
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 768m
+
+  mall-gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.gateway
+    image: mall/gateway:1.0
+    container_name: mall-svc-gateway
+    restart: unless-stopped
+    ports:
+      - "8201:8201"
+    environment:
+      <<: *java-env
+    depends_on:
+      - nacos
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512m
+
+  mall-admin:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.admin
+    image: mall/admin:1.0
+    container_name: mall-svc-admin
+    restart: unless-stopped
+    environment:
+      <<: *java-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/mall?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 768m
+
+  mall-portal:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.portal
+    image: mall/portal:1.0
+    container_name: mall-svc-portal
+    restart: unless-stopped
+    environment:
+      <<: *java-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/mall?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
+      SPRING_RABBITMQ_HOST: rabbitmq
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+      - rabbitmq
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1g
+
+  mall-auth:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.auth
+    image: mall/auth:1.0
+    container_name: mall-svc-auth
+    restart: unless-stopped
+    environment:
+      <<: *java-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/mall?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
+    depends_on:
+      - mysql
+      - nacos
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384m
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mall-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - mall-prometheus-data:/prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 768m
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: mall-cadvisor
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: mall-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128m
+
+  jmeter:
+    image: eclipse-temurin:17-jre
+    container_name: mall-jmeter
+    profiles: ["test"]
+    entrypoint: ["/opt/jmeter/bin/jmeter"]
+    working_dir: /jtl
+    environment:
+      HEAP: -Xms256m -Xmx700m
+    volumes:
+      - ${HOME}/tools/apache-jmeter-5.6.3:/opt/jmeter:ro
+      - ../../benchmark/jmx:/jmx:ro
+      - ../../benchmark/jtl:/jtl
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1g
+
+  dashboard:
+    image: node:22-alpine
+    container_name: mall-dashboard
+    profiles: ["report"]
+    working_dir: /app
+    command: sh -c "if [ ! -d node_modules/next ]; then npm install --registry=https://registry.npmmirror.com --no-audit --no-fund; fi && npm run dev -- -H 0.0.0.0"
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - ../../benchmark/dashboard-next:/app
+      - dashboard-node-modules:/app/node_modules
+      - ../../benchmark/results:/data:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1g
+
+volumes:
+  mall-mysql-data:
+  mall-nacos-data:
+  mall-rabbitmq-data:
+  mall-prometheus-data:
+  dashboard-node-modules:

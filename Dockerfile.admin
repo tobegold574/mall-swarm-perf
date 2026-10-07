@@ -1,0 +1,6 @@
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY mall-admin/target/mall-admin-1.0-SNAPSHOT.jar app.jar
+ENV TZ=Asia/Shanghai
+EXPOSE 8080
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=70.0", "-jar", "app.jar"]

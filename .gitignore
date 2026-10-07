@@ -9,3 +9,13 @@ target/
 .settings/
 .classpath
 .project
+# benchmark 产物
+benchmark/results/*.jtl
+benchmark/results/*_report/
+benchmark/jtl/
+__pycache__/
+*.pyc
+jmeter.log
+.next/
+node_modules/
+benchmark/results/
