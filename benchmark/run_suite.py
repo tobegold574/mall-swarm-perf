@@ -177,11 +177,12 @@ for r in range(1, ROUNDS + 1):
                            "tps": st["tps"], "p50_ms": st["p50_ms"], "p99_ms": st["p99_ms"],
                            "final_stock": int(final[0]), "final_lock_stock": int(final[1]),
                            "per_order_sql": round(prof["total_stmts"] / max(st["ok"], 1), 1),
+                           "sql_per_req": round(prof["total_stmts"] / max(len(results), 1), 1),
                            "oversell": st["ok"] > STOCK or int(final[1]) < 0,
                            "db_profile": prof, "window": {"start": t0, "end": t1}})
     w = suite["write"][-1]
     log(f"  r{r}: 成功={w['success']} 落库={w['db_orders']} lock_stock={w['final_lock_stock']} "
-        f"每单SQL={w['per_order_sql']} {'❌超卖' if w['oversell'] else '✅'}")
+        f"每请求SQL={w['sql_per_req']} {'❌超卖' if w['oversell'] else '✅'}")
 
 overall_end = now_iso()
 suite["window"] = {"start": overall_start, "end": overall_end}

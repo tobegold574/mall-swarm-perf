@@ -2,9 +2,9 @@ package com.macro.mall.portal.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.github.pagehelper.PageHelper;
-import com.macro.mall.common.api.CommonPage;
-import com.macro.mall.common.exception.Asserts;
+import com.macro.mall.common.api.CommonPage;import com.macro.mall.common.exception.Asserts;
 import com.macro.mall.common.service.RedisService;
 import com.macro.mall.mapper.*;
 import com.macro.mall.model.*;
@@ -17,6 +17,7 @@ import com.macro.mall.portal.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
@@ -91,6 +92,7 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> generateOrder(OrderParam orderParam) {
         List<OmsOrderItem> orderItemList = new ArrayList<>();
         //校验收货地址
@@ -723,12 +725,19 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
 
     /**
      * 锁定下单商品的所有库存
+     * 原子条件更新（lock_stock = lock_stock + N WHERE 锁定后不超过真实库存），
+     * 替换原先“查-改-写”三步：并发下丢失更新导致超卖（资损级缺陷）
      */
     private void lockStock(List<CartPromotionItem> cartPromotionItemList) {
         for (CartPromotionItem cartPromotionItem : cartPromotionItemList) {
-            PmsSkuStock skuStock = skuStockMapper.selectByPrimaryKey(cartPromotionItem.getProductSkuId());
-            skuStock.setLockStock(skuStock.getLockStock() + cartPromotionItem.getQuantity());
-            skuStockMapper.updateByPrimaryKeySelective(skuStock);
+            LambdaUpdateWrapper<PmsSkuStock> wrapper = new LambdaUpdateWrapper<PmsSkuStock>()
+                    .setSql("lock_stock = lock_stock + {0}", cartPromotionItem.getQuantity())
+                    .eq(PmsSkuStock::getId, cartPromotionItem.getProductSkuId())
+                    .apply("lock_stock + {0} <= stock", cartPromotionItem.getQuantity());
+            int rows = skuStockMapper.update(null, wrapper);
+            if (rows == 0) {
+                Asserts.fail("库存不足，无法下单");
+            }
         }
     }
 
