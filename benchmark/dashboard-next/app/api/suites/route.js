@@ -11,7 +11,7 @@ export async function GET() {
       if (!d.startsWith("suite_")) continue;
       try {
         const s = JSON.parse(fs.readFileSync(path.join(dir, d, "suite.json"), "utf8"));
-        out.push({ key: s.generated_at || d, dir: d, ...s });
+        out.push({ key: d.replace("suite_", ""), dir: d, ...s });
       } catch {}
     }
   } catch {}
