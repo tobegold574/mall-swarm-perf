@@ -3,15 +3,14 @@ package com.macro.mall.portal.service.impl;
 import cn.dev33.satoken.stp.SaTokenInfo;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.BCrypt;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.macro.mall.common.constant.AuthConstant;
 import com.macro.mall.common.dto.UserDto;
 import com.macro.mall.common.exception.Asserts;
 import com.macro.mall.mapper.UmsMemberLevelMapper;
 import com.macro.mall.mapper.UmsMemberMapper;
 import com.macro.mall.model.UmsMember;
-import com.macro.mall.model.UmsMemberExample;
 import com.macro.mall.model.UmsMemberLevel;
-import com.macro.mall.model.UmsMemberLevelExample;
 import com.macro.mall.portal.service.UmsMemberCacheService;
 import com.macro.mall.portal.service.UmsMemberService;
 import com.macro.mall.portal.util.StpMemberUtil;
@@ -47,9 +46,8 @@ public class UmsMemberServiceImpl implements UmsMemberService {
 
     @Override
     public UmsMember getByUsername(String username) {
-        UmsMemberExample example = new UmsMemberExample();
-        example.createCriteria().andUsernameEqualTo(username);
-        List<UmsMember> memberList = memberMapper.selectByExample(example);
+        List<UmsMember> memberList = memberMapper.selectList(new LambdaQueryWrapper<UmsMember>()
+                .eq(UmsMember::getUsername, username));
         if (!CollectionUtils.isEmpty(memberList)) {
             // 用户名唯一
             return memberList.get(0);
@@ -59,7 +57,7 @@ public class UmsMemberServiceImpl implements UmsMemberService {
 
     @Override
     public UmsMember getById(Long id) {
-        return memberMapper.selectByPrimaryKey(id);
+        return memberMapper.selectById(id);
     }
 
     @Override
@@ -69,10 +67,10 @@ public class UmsMemberServiceImpl implements UmsMemberService {
             Asserts.fail("验证码错误");
         }
         //查询是否已有该用户
-        UmsMemberExample example = new UmsMemberExample();
-        example.createCriteria().andUsernameEqualTo(username);
-        example.or(example.createCriteria().andPhoneEqualTo(telephone));
-        List<UmsMember> umsMembers = memberMapper.selectByExample(example);
+        List<UmsMember> umsMembers = memberMapper.selectList(new LambdaQueryWrapper<UmsMember>()
+                .eq(UmsMember::getUsername, username)
+                .or()
+                .eq(UmsMember::getPhone, telephone));
         if (!CollectionUtils.isEmpty(umsMembers)) {
             Asserts.fail("该用户已经存在");
         }
@@ -84,9 +82,8 @@ public class UmsMemberServiceImpl implements UmsMemberService {
         umsMember.setCreateTime(new Date());
         umsMember.setStatus(1);
         //获取默认会员等级并设置
-        UmsMemberLevelExample levelExample = new UmsMemberLevelExample();
-        levelExample.createCriteria().andDefaultStatusEqualTo(1);
-        List<UmsMemberLevel> memberLevelList = memberLevelMapper.selectByExample(levelExample);
+        List<UmsMemberLevel> memberLevelList = memberLevelMapper.selectList(new LambdaQueryWrapper<UmsMemberLevel>()
+                .eq(UmsMemberLevel::getDefaultStatus, 1));
         if (!CollectionUtils.isEmpty(memberLevelList)) {
             umsMember.setMemberLevelId(memberLevelList.get(0).getId());
         }
@@ -107,9 +104,8 @@ public class UmsMemberServiceImpl implements UmsMemberService {
 
     @Override
     public void updatePassword(String telephone, String password, String authCode) {
-        UmsMemberExample example = new UmsMemberExample();
-        example.createCriteria().andPhoneEqualTo(telephone);
-        List<UmsMember> memberList = memberMapper.selectByExample(example);
+        List<UmsMember> memberList = memberMapper.selectList(new LambdaQueryWrapper<UmsMember>()
+                .eq(UmsMember::getPhone, telephone));
         if(CollectionUtils.isEmpty(memberList)){
             Asserts.fail("该账号不存在");
         }
@@ -119,7 +115,7 @@ public class UmsMemberServiceImpl implements UmsMemberService {
         }
         UmsMember umsMember = memberList.get(0);
         umsMember.setPassword(BCrypt.hashpw(password));
-        memberMapper.updateByPrimaryKeySelective(umsMember);
+        memberMapper.updateById(umsMember);
         memberCacheService.delMember(umsMember.getId());
     }
 
@@ -143,7 +139,7 @@ public class UmsMemberServiceImpl implements UmsMemberService {
         record.setId(id);
         record.setIntegration(integration);
         // selective 更新
-        memberMapper.updateByPrimaryKeySelective(record);
+        memberMapper.updateById(record);
         memberCacheService.delMember(id);
     }
 

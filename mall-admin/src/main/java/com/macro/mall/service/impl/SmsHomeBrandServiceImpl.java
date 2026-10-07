@@ -1,9 +1,10 @@
 package com.macro.mall.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.github.pagehelper.PageHelper;
 import com.macro.mall.mapper.SmsHomeBrandMapper;
 import com.macro.mall.model.SmsHomeBrand;
-import com.macro.mall.model.SmsHomeBrandExample;
 import com.macro.mall.service.SmsHomeBrandService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -34,37 +35,34 @@ public class SmsHomeBrandServiceImpl implements SmsHomeBrandService {
         SmsHomeBrand homeBrand = new SmsHomeBrand();
         homeBrand.setId(id);
         homeBrand.setSort(sort);
-        return homeBrandMapper.updateByPrimaryKeySelective(homeBrand);
+        return homeBrandMapper.updateById(homeBrand);
     }
 
     @Override
     public int delete(List<Long> ids) {
-        SmsHomeBrandExample example = new SmsHomeBrandExample();
-        example.createCriteria().andIdIn(ids);
-        return homeBrandMapper.deleteByExample(example);
+        return homeBrandMapper.delete(new LambdaQueryWrapper<SmsHomeBrand>()
+                .in(SmsHomeBrand::getId, ids));
     }
 
     @Override
     public int updateRecommendStatus(List<Long> ids, Integer recommendStatus) {
-        SmsHomeBrandExample example = new SmsHomeBrandExample();
-        example.createCriteria().andIdIn(ids);
         SmsHomeBrand record = new SmsHomeBrand();
         record.setRecommendStatus(recommendStatus);
-        return homeBrandMapper.updateByExampleSelective(record,example);
+        return homeBrandMapper.update(record, new LambdaUpdateWrapper<SmsHomeBrand>()
+                .in(SmsHomeBrand::getId, ids));
     }
 
     @Override
     public List<SmsHomeBrand> list(String brandName, Integer recommendStatus, Integer pageSize, Integer pageNum) {
         PageHelper.startPage(pageNum,pageSize);
-        SmsHomeBrandExample example = new SmsHomeBrandExample();
-        SmsHomeBrandExample.Criteria criteria = example.createCriteria();
+        LambdaQueryWrapper<SmsHomeBrand> wrapper = new LambdaQueryWrapper<SmsHomeBrand>()
+                .orderByDesc(SmsHomeBrand::getSort);
         if(!StringUtils.isEmpty(brandName)){
-            criteria.andBrandNameLike("%"+brandName+"%");
+            wrapper.like(SmsHomeBrand::getBrandName, brandName);
         }
         if(recommendStatus!=null){
-            criteria.andRecommendStatusEqualTo(recommendStatus);
+            wrapper.eq(SmsHomeBrand::getRecommendStatus, recommendStatus);
         }
-        example.setOrderByClause("sort desc");
-        return homeBrandMapper.selectByExample(example);
+        return homeBrandMapper.selectList(wrapper);
     }
 }

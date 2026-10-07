@@ -1,6 +1,7 @@
 package com.macro.mall.portal.service.impl;
 
 import com.github.pagehelper.PageHelper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.macro.mall.mapper.*;
 import com.macro.mall.model.*;
 import com.macro.mall.portal.dao.HomeDao;
@@ -59,33 +60,28 @@ public class HomeServiceImpl implements HomeService {
     public List<PmsProduct> recommendProductList(Integer pageSize, Integer pageNum) {
         // TODO: 2019/1/29 暂时默认推荐所有商品
         PageHelper.startPage(pageNum,pageSize);
-        PmsProductExample example = new PmsProductExample();
-        example.createCriteria()
-                .andDeleteStatusEqualTo(0)
-                .andPublishStatusEqualTo(1);
-        return productMapper.selectByExample(example);
+        return productMapper.selectList(new LambdaQueryWrapper<PmsProduct>()
+                .eq(PmsProduct::getDeleteStatus, 0)
+                .eq(PmsProduct::getPublishStatus, 1));
     }
 
     @Override
     public List<PmsProductCategory> getProductCateList(Long parentId) {
-        PmsProductCategoryExample example = new PmsProductCategoryExample();
-        example.createCriteria()
-                .andShowStatusEqualTo(1)
-                .andParentIdEqualTo(parentId);
-        example.setOrderByClause("sort desc");
-        return productCategoryMapper.selectByExample(example);
+        return productCategoryMapper.selectList(new LambdaQueryWrapper<PmsProductCategory>()
+                .eq(PmsProductCategory::getShowStatus, 1)
+                .eq(PmsProductCategory::getParentId, parentId)
+                .orderByDesc(PmsProductCategory::getSort));
     }
 
     @Override
     public List<CmsSubject> getSubjectList(Long cateId, Integer pageSize, Integer pageNum) {
         PageHelper.startPage(pageNum,pageSize);
-        CmsSubjectExample example = new CmsSubjectExample();
-        CmsSubjectExample.Criteria criteria = example.createCriteria();
-        criteria.andShowStatusEqualTo(1);
+        LambdaQueryWrapper<CmsSubject> wrapper = new LambdaQueryWrapper<CmsSubject>()
+                .eq(CmsSubject::getShowStatus, 1);
         if(cateId!=null){
-            criteria.andCategoryIdEqualTo(cateId);
+            wrapper.eq(CmsSubject::getCategoryId, cateId);
         }
-        return subjectMapper.selectByExample(example);
+        return subjectMapper.selectList(wrapper);
     }
 
     @Override
@@ -128,11 +124,9 @@ public class HomeServiceImpl implements HomeService {
 
     //获取下一个场次信息
     private SmsFlashPromotionSession getNextFlashPromotionSession(Date date) {
-        SmsFlashPromotionSessionExample sessionExample = new SmsFlashPromotionSessionExample();
-        sessionExample.createCriteria()
-                .andStartTimeGreaterThan(date);
-        sessionExample.setOrderByClause("start_time asc");
-        List<SmsFlashPromotionSession> promotionSessionList = promotionSessionMapper.selectByExample(sessionExample);
+        List<SmsFlashPromotionSession> promotionSessionList = promotionSessionMapper.selectList(new LambdaQueryWrapper<SmsFlashPromotionSession>()
+                .gt(SmsFlashPromotionSession::getStartTime, date)
+                .orderByAsc(SmsFlashPromotionSession::getStartTime));
         if (!CollectionUtils.isEmpty(promotionSessionList)) {
             return promotionSessionList.get(0);
         }
@@ -140,21 +134,19 @@ public class HomeServiceImpl implements HomeService {
     }
 
     private List<SmsHomeAdvertise> getHomeAdvertiseList() {
-        SmsHomeAdvertiseExample example = new SmsHomeAdvertiseExample();
-        example.createCriteria().andTypeEqualTo(1).andStatusEqualTo(1);
-        example.setOrderByClause("sort desc");
-        return advertiseMapper.selectByExample(example);
+        return advertiseMapper.selectList(new LambdaQueryWrapper<SmsHomeAdvertise>()
+                .eq(SmsHomeAdvertise::getType, 1)
+                .eq(SmsHomeAdvertise::getStatus, 1)
+                .orderByDesc(SmsHomeAdvertise::getSort));
     }
 
     //根据时间获取秒杀活动
     private SmsFlashPromotion getFlashPromotion(Date date) {
         Date currDate = DateUtil.getDate(date);
-        SmsFlashPromotionExample example = new SmsFlashPromotionExample();
-        example.createCriteria()
-                .andStatusEqualTo(1)
-                .andStartDateLessThanOrEqualTo(currDate)
-                .andEndDateGreaterThanOrEqualTo(currDate);
-        List<SmsFlashPromotion> flashPromotionList = flashPromotionMapper.selectByExample(example);
+        List<SmsFlashPromotion> flashPromotionList = flashPromotionMapper.selectList(new LambdaQueryWrapper<SmsFlashPromotion>()
+                .eq(SmsFlashPromotion::getStatus, 1)
+                .le(SmsFlashPromotion::getStartDate, currDate)
+                .ge(SmsFlashPromotion::getEndDate, currDate));
         if (!CollectionUtils.isEmpty(flashPromotionList)) {
             return flashPromotionList.get(0);
         }
@@ -164,11 +156,9 @@ public class HomeServiceImpl implements HomeService {
     //根据时间获取秒杀场次
     private SmsFlashPromotionSession getFlashPromotionSession(Date date) {
         Date currTime = DateUtil.getTime(date);
-        SmsFlashPromotionSessionExample sessionExample = new SmsFlashPromotionSessionExample();
-        sessionExample.createCriteria()
-                .andStartTimeLessThanOrEqualTo(currTime)
-                .andEndTimeGreaterThanOrEqualTo(currTime);
-        List<SmsFlashPromotionSession> promotionSessionList = promotionSessionMapper.selectByExample(sessionExample);
+        List<SmsFlashPromotionSession> promotionSessionList = promotionSessionMapper.selectList(new LambdaQueryWrapper<SmsFlashPromotionSession>()
+                .le(SmsFlashPromotionSession::getStartTime, currTime)
+                .ge(SmsFlashPromotionSession::getEndTime, currTime));
         if (!CollectionUtils.isEmpty(promotionSessionList)) {
             return promotionSessionList.get(0);
         }

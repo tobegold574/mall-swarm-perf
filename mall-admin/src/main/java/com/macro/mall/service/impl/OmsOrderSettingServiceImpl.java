@@ -1,5 +1,6 @@
 package com.macro.mall.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.macro.mall.mapper.OmsOrderSettingMapper;
 import com.macro.mall.model.OmsOrderSetting;
 import com.macro.mall.service.OmsOrderSettingService;
@@ -17,12 +18,18 @@ public class OmsOrderSettingServiceImpl implements OmsOrderSettingService {
 
     @Override
     public OmsOrderSetting getItem(Long id) {
-        return orderSettingMapper.selectByPrimaryKey(id);
+        return orderSettingMapper.selectById(id);
     }
 
     @Override
     public int update(Long id, OmsOrderSetting orderSetting) {
         orderSetting.setId(id);
-        return orderSettingMapper.updateByPrimaryKey(orderSetting);
+        return orderSettingMapper.update(null, new LambdaUpdateWrapper<OmsOrderSetting>()
+                .eq(OmsOrderSetting::getId, orderSetting.getId())
+                .set(OmsOrderSetting::getFlashOrderOvertime, orderSetting.getFlashOrderOvertime())
+                .set(OmsOrderSetting::getNormalOrderOvertime, orderSetting.getNormalOrderOvertime())
+                .set(OmsOrderSetting::getConfirmOvertime, orderSetting.getConfirmOvertime())
+                .set(OmsOrderSetting::getFinishOvertime, orderSetting.getFinishOvertime())
+                .set(OmsOrderSetting::getCommentOvertime, orderSetting.getCommentOvertime()));
     }
 }

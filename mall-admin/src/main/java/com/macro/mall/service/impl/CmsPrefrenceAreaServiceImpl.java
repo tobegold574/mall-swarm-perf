@@ -1,8 +1,8 @@
 package com.macro.mall.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.macro.mall.mapper.CmsPrefrenceAreaMapper;
 import com.macro.mall.model.CmsPrefrenceArea;
-import com.macro.mall.model.CmsPrefrenceAreaExample;
 import com.macro.mall.service.CmsPrefrenceAreaService;
 // Autowired 不属于 stereotype
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +22,6 @@ public class CmsPrefrenceAreaServiceImpl implements CmsPrefrenceAreaService {
 
     @Override
     public List<CmsPrefrenceArea> listAll() {
-        return prefrenceAreaMapper.selectByExample(new CmsPrefrenceAreaExample());
+        return prefrenceAreaMapper.selectList(new LambdaQueryWrapper<CmsPrefrenceArea>());
     }
 }

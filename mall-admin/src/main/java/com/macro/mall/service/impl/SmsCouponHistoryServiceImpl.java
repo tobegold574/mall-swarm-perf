@@ -1,9 +1,9 @@
 package com.macro.mall.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.github.pagehelper.PageHelper;
 import com.macro.mall.mapper.SmsCouponHistoryMapper;
 import com.macro.mall.model.SmsCouponHistory;
-import com.macro.mall.model.SmsCouponHistoryExample;
 import com.macro.mall.service.SmsCouponHistoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,17 +22,16 @@ public class SmsCouponHistoryServiceImpl implements SmsCouponHistoryService {
     @Override
     public List<SmsCouponHistory> list(Long couponId, Integer useStatus, String orderSn, Integer pageSize, Integer pageNum) {
         PageHelper.startPage(pageNum,pageSize);
-        SmsCouponHistoryExample example = new SmsCouponHistoryExample();
-        SmsCouponHistoryExample.Criteria criteria = example.createCriteria();
+        LambdaQueryWrapper<SmsCouponHistory> wrapper = new LambdaQueryWrapper<>();
         if(couponId!=null){
-            criteria.andCouponIdEqualTo(couponId);
+            wrapper.eq(SmsCouponHistory::getCouponId, couponId);
         }
         if(useStatus!=null){
-            criteria.andUseStatusEqualTo(useStatus);
+            wrapper.eq(SmsCouponHistory::getUseStatus, useStatus);
         }
         if(!StringUtils.isEmpty(orderSn)){
-            criteria.andOrderSnEqualTo(orderSn);
+            wrapper.eq(SmsCouponHistory::getOrderSn, orderSn);
         }
-        return historyMapper.selectByExample(example);
+        return historyMapper.selectList(wrapper);
     }
 }

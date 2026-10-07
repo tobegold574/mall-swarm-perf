@@ -1,8 +1,8 @@
 package com.macro.mall.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.macro.mall.mapper.UmsResourceCategoryMapper;
 import com.macro.mall.model.UmsResourceCategory;
-import com.macro.mall.model.UmsResourceCategoryExample;
 import com.macro.mall.service.UmsResourceCategoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -21,9 +21,8 @@ public class UmsResourceCategoryServiceImpl implements UmsResourceCategoryServic
 
     @Override
     public List<UmsResourceCategory> listAll() {
-        UmsResourceCategoryExample example = new UmsResourceCategoryExample();
-        example.setOrderByClause("sort desc");
-        return resourceCategoryMapper.selectByExample(example);
+        return resourceCategoryMapper.selectList(new LambdaQueryWrapper<UmsResourceCategory>()
+                .orderByDesc(UmsResourceCategory::getSort));
     }
 
     @Override
@@ -35,11 +34,11 @@ public class UmsResourceCategoryServiceImpl implements UmsResourceCategoryServic
     @Override
     public int update(Long id, UmsResourceCategory umsResourceCategory) {
         umsResourceCategory.setId(id);
-        return resourceCategoryMapper.updateByPrimaryKeySelective(umsResourceCategory);
+        return resourceCategoryMapper.updateById(umsResourceCategory);
     }
 
     @Override
     public int delete(Long id) {
-        return resourceCategoryMapper.deleteByPrimaryKey(id);
+        return resourceCategoryMapper.deleteById(id);
     }
 }

@@ -1,5 +1,6 @@
 package com.macro.mall.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.github.pagehelper.PageHelper;
 import com.macro.mall.dao.OmsOrderReturnApplyDao;
 import com.macro.mall.dto.OmsOrderReturnApplyResult;
@@ -7,7 +8,6 @@ import com.macro.mall.dto.OmsReturnApplyQueryParam;
 import com.macro.mall.dto.OmsUpdateStatusParam;
 import com.macro.mall.mapper.OmsOrderReturnApplyMapper;
 import com.macro.mall.model.OmsOrderReturnApply;
-import com.macro.mall.model.OmsOrderReturnApplyExample;
 import com.macro.mall.service.OmsOrderReturnApplyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -33,9 +33,9 @@ public class OmsOrderReturnApplyServiceImpl implements OmsOrderReturnApplyServic
 
     @Override
     public int delete(List<Long> ids) {
-        OmsOrderReturnApplyExample example = new OmsOrderReturnApplyExample();
-        example.createCriteria().andIdIn(ids).andStatusEqualTo(3);
-        return returnApplyMapper.deleteByExample(example);
+        return returnApplyMapper.delete(new LambdaQueryWrapper<OmsOrderReturnApply>()
+                .in(OmsOrderReturnApply::getId, ids)
+                .eq(OmsOrderReturnApply::getStatus, 3));
     }
 
     @Override
@@ -69,7 +69,7 @@ public class OmsOrderReturnApplyServiceImpl implements OmsOrderReturnApplyServic
         }else{
             return 0;
         }
-        return returnApplyMapper.updateByPrimaryKeySelective(returnApply);
+        return returnApplyMapper.updateById(returnApply);
     }
 
     @Override

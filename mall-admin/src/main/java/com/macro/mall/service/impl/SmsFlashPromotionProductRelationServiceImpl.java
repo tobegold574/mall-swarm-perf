@@ -1,11 +1,12 @@
 package com.macro.mall.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.github.pagehelper.PageHelper;
 import com.macro.mall.dao.SmsFlashPromotionProductRelationDao;
 import com.macro.mall.dto.SmsFlashPromotionProduct;
 import com.macro.mall.mapper.SmsFlashPromotionProductRelationMapper;
 import com.macro.mall.model.SmsFlashPromotionProductRelation;
-import com.macro.mall.model.SmsFlashPromotionProductRelationExample;
 import com.macro.mall.service.SmsFlashPromotionProductRelationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -33,17 +34,25 @@ public class SmsFlashPromotionProductRelationServiceImpl implements SmsFlashProm
     @Override
     public int update(Long id, SmsFlashPromotionProductRelation relation) {
         relation.setId(id);
-        return relationMapper.updateByPrimaryKey(relation);
+        return relationMapper.update(null, new LambdaUpdateWrapper<SmsFlashPromotionProductRelation>()
+                .eq(SmsFlashPromotionProductRelation::getId, relation.getId())
+                .set(SmsFlashPromotionProductRelation::getFlashPromotionId, relation.getFlashPromotionId())
+                .set(SmsFlashPromotionProductRelation::getFlashPromotionSessionId, relation.getFlashPromotionSessionId())
+                .set(SmsFlashPromotionProductRelation::getProductId, relation.getProductId())
+                .set(SmsFlashPromotionProductRelation::getFlashPromotionPrice, relation.getFlashPromotionPrice())
+                .set(SmsFlashPromotionProductRelation::getFlashPromotionCount, relation.getFlashPromotionCount())
+                .set(SmsFlashPromotionProductRelation::getFlashPromotionLimit, relation.getFlashPromotionLimit())
+                .set(SmsFlashPromotionProductRelation::getSort, relation.getSort()));
     }
 
     @Override
     public int delete(Long id) {
-        return relationMapper.deleteByPrimaryKey(id);
+        return relationMapper.deleteById(id);
     }
 
     @Override
     public SmsFlashPromotionProductRelation getItem(Long id) {
-        return relationMapper.selectByPrimaryKey(id);
+        return relationMapper.selectById(id);
     }
 
     @Override
@@ -54,10 +63,8 @@ public class SmsFlashPromotionProductRelationServiceImpl implements SmsFlashProm
 
     @Override
     public long getCount(Long flashPromotionId, Long flashPromotionSessionId) {
-        SmsFlashPromotionProductRelationExample example = new SmsFlashPromotionProductRelationExample();
-        example.createCriteria()
-                .andFlashPromotionIdEqualTo(flashPromotionId)
-                .andFlashPromotionSessionIdEqualTo(flashPromotionSessionId);
-        return relationMapper.countByExample(example);
+        return relationMapper.selectCount(new LambdaQueryWrapper<SmsFlashPromotionProductRelation>()
+                .eq(SmsFlashPromotionProductRelation::getFlashPromotionId, flashPromotionId)
+                .eq(SmsFlashPromotionProductRelation::getFlashPromotionSessionId, flashPromotionSessionId));
     }
 }

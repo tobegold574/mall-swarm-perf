@@ -1,5 +1,7 @@
 package com.macro.mall.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.github.pagehelper.PageHelper;
 import com.macro.mall.dao.SmsCouponDao;
 import com.macro.mall.dao.SmsCouponProductCategoryRelationDao;
@@ -72,7 +74,7 @@ public class SmsCouponServiceImpl implements SmsCouponService {
     @Override
     public int delete(Long id) {
         //删除优惠券
-        int count = couponMapper.deleteByPrimaryKey(id);
+        int count = couponMapper.deleteById(id);
         //删除商品关联
         deleteProductRelation(id);
         //删除商品分类关联
@@ -81,15 +83,13 @@ public class SmsCouponServiceImpl implements SmsCouponService {
     }
 
     private void deleteProductCategoryRelation(Long id) {
-        SmsCouponProductCategoryRelationExample productCategoryRelationExample = new SmsCouponProductCategoryRelationExample();
-        productCategoryRelationExample.createCriteria().andCouponIdEqualTo(id);
-        productCategoryRelationMapper.deleteByExample(productCategoryRelationExample);
+        productCategoryRelationMapper.delete(new LambdaQueryWrapper<SmsCouponProductCategoryRelation>()
+                .eq(SmsCouponProductCategoryRelation::getCouponId, id));
     }
 
     private void deleteProductRelation(Long id) {
-        SmsCouponProductRelationExample productRelationExample = new SmsCouponProductRelationExample();
-        productRelationExample.createCriteria().andCouponIdEqualTo(id);
-        productRelationMapper.deleteByExample(productRelationExample);
+        productRelationMapper.delete(new LambdaQueryWrapper<SmsCouponProductRelation>()
+                .eq(SmsCouponProductRelation::getCouponId, id));
     }
 
     /**
@@ -98,7 +98,23 @@ public class SmsCouponServiceImpl implements SmsCouponService {
     @Override
     public int update(Long id, SmsCouponParam couponParam) {
         couponParam.setId(id);
-        int count =couponMapper.updateByPrimaryKey(couponParam);
+        int count = couponMapper.update(null, new LambdaUpdateWrapper<SmsCoupon>()
+                .eq(SmsCoupon::getId, couponParam.getId())
+                .set(SmsCoupon::getType, couponParam.getType())
+                .set(SmsCoupon::getName, couponParam.getName())
+                .set(SmsCoupon::getPlatform, couponParam.getPlatform())
+                .set(SmsCoupon::getCount, couponParam.getCount())
+                .set(SmsCoupon::getAmount, couponParam.getAmount())
+                .set(SmsCoupon::getPerLimit, couponParam.getPerLimit())
+                .set(SmsCoupon::getMinPoint, couponParam.getMinPoint())
+                .set(SmsCoupon::getStartTime, couponParam.getStartTime())
+                .set(SmsCoupon::getEndTime, couponParam.getEndTime())
+                .set(SmsCoupon::getUseType, couponParam.getUseType())
+                .set(SmsCoupon::getNote, couponParam.getNote())
+                .set(SmsCoupon::getPublishCount, couponParam.getPublishCount())
+                .set(SmsCoupon::getEnableTime, couponParam.getEnableTime())
+                .set(SmsCoupon::getCode, couponParam.getCode())
+                .set(SmsCoupon::getMemberLevel, couponParam.getMemberLevel()));
         //删除后插入优惠券和商品关系表
         if(couponParam.getUseType().equals(2)){
             for(SmsCouponProductRelation productRelation:couponParam.getProductRelationList()){
@@ -120,16 +136,15 @@ public class SmsCouponServiceImpl implements SmsCouponService {
 
     @Override
     public List<SmsCoupon> list(String name, Integer type, Integer pageSize, Integer pageNum) {
-        SmsCouponExample example = new SmsCouponExample();
-        SmsCouponExample.Criteria criteria = example.createCriteria();
+        LambdaQueryWrapper<SmsCoupon> wrapper = new LambdaQueryWrapper<>();
         if(!StringUtils.isEmpty(name)){
-            criteria.andNameLike("%"+name+"%");
+            wrapper.like(SmsCoupon::getName, name);
         }
         if(type!=null){
-            criteria.andTypeEqualTo(type);
+            wrapper.eq(SmsCoupon::getType, type);
         }
         PageHelper.startPage(pageNum,pageSize);
-        return couponMapper.selectByExample(example);
+        return couponMapper.selectList(wrapper);
     }
 
     @Override

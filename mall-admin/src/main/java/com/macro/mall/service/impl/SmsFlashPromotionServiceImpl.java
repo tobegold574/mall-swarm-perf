@@ -1,9 +1,10 @@
 package com.macro.mall.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.github.pagehelper.PageHelper;
 import com.macro.mall.mapper.SmsFlashPromotionMapper;
 import com.macro.mall.model.SmsFlashPromotion;
-import com.macro.mall.model.SmsFlashPromotionExample;
 import com.macro.mall.service.SmsFlashPromotionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -30,12 +31,18 @@ public class SmsFlashPromotionServiceImpl implements SmsFlashPromotionService {
     @Override
     public int update(Long id, SmsFlashPromotion flashPromotion) {
         flashPromotion.setId(id);
-        return flashPromotionMapper.updateByPrimaryKey(flashPromotion);
+        return flashPromotionMapper.update(null, new LambdaUpdateWrapper<SmsFlashPromotion>()
+                .eq(SmsFlashPromotion::getId, flashPromotion.getId())
+                .set(SmsFlashPromotion::getTitle, flashPromotion.getTitle())
+                .set(SmsFlashPromotion::getStartDate, flashPromotion.getStartDate())
+                .set(SmsFlashPromotion::getEndDate, flashPromotion.getEndDate())
+                .set(SmsFlashPromotion::getStatus, flashPromotion.getStatus())
+                .set(SmsFlashPromotion::getCreateTime, flashPromotion.getCreateTime()));
     }
 
     @Override
     public int delete(Long id) {
-        return flashPromotionMapper.deleteByPrimaryKey(id);
+        return flashPromotionMapper.deleteById(id);
     }
 
     @Override
@@ -43,21 +50,21 @@ public class SmsFlashPromotionServiceImpl implements SmsFlashPromotionService {
         SmsFlashPromotion flashPromotion = new SmsFlashPromotion();
         flashPromotion.setId(id);
         flashPromotion.setStatus(status);
-        return flashPromotionMapper.updateByPrimaryKeySelective(flashPromotion);
+        return flashPromotionMapper.updateById(flashPromotion);
     }
 
     @Override
     public SmsFlashPromotion getItem(Long id) {
-        return flashPromotionMapper.selectByPrimaryKey(id);
+        return flashPromotionMapper.selectById(id);
     }
 
     @Override
     public List<SmsFlashPromotion> list(String keyword, Integer pageSize, Integer pageNum) {
         PageHelper.startPage(pageNum, pageSize);
-        SmsFlashPromotionExample example = new SmsFlashPromotionExample();
+        LambdaQueryWrapper<SmsFlashPromotion> wrapper = new LambdaQueryWrapper<>();
         if (!StringUtils.isEmpty(keyword)) {
-            example.createCriteria().andTitleLike("%" + keyword + "%");
+            wrapper.like(SmsFlashPromotion::getTitle, keyword);
         }
-        return flashPromotionMapper.selectByExample(example);
+        return flashPromotionMapper.selectList(wrapper);
     }
 }

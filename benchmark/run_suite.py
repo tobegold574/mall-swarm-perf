@@ -177,7 +177,7 @@ for r in range(1, ROUNDS + 1):
                            "tps": st["tps"], "p50_ms": st["p50_ms"], "p99_ms": st["p99_ms"],
                            "final_stock": int(final[0]), "final_lock_stock": int(final[1]),
                            "per_order_sql": round(prof["total_stmts"] / max(st["ok"], 1), 1),
-                           "sql_per_req": round(prof["total_stmts"] / max(len(results), 1), 1),
+                           "sql_per_req": round(prof["total_stmts"] / max(THREADS, 1), 1),
                            "oversell": st["ok"] > STOCK or int(final[1]) < 0,
                            "db_profile": prof, "window": {"start": t0, "end": t1}})
     w = suite["write"][-1]

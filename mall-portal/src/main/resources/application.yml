@@ -115,3 +115,7 @@ sa-token:
 spring:
   jackson:
     default-property-inclusion: non_null
+mybatis-plus:
+  global-config:
+    db-config:
+      id-type: auto
