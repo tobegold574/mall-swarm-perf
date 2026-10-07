@@ -110,3 +110,8 @@ sa-token:
   jwt-secret-key: sa-secret-key123
   # 是否打印banner
   is-print: false
+
+---
+spring:
+  jackson:
+    default-property-inclusion: non_null
