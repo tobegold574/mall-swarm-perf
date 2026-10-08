@@ -20,10 +20,10 @@ function Chart({ option, height = 320 }: { option: any; height?: number }) {
   return <div ref={ref} style={{ width: "100%", height }} />;
 }
 
-const RUNGS = [100, 200, 500, 1000];
-const SECTIONS = [["summary", "总体TPS"], ["throughput", "吞吐"], ["sql", "SQL 层"], ["server", "服务端延迟"], ["resource", "资源峰值"]];
+const RUNGS = [500, 1000];
+const SECTIONS = [["summary", "总体TPS"], ["throughput", "吞吐"], ["sql", "SQL 层"], ["resource", "资源消耗"]];
 const ANIM = { animationDuration: 600, animationEasing: "cubicOut" as const };
-const key = (img: string, vt: string, t: number) => `${img}|${vt}|${t}`;
+const key = (ep: string, v: string, t: number) => `${ep}|${v}|${t}`;
 const short = (ep: string) => ep.replace(/^(admin|portal)_/, "");
 
 function num(x: any, d = 0, s = "") {
@@ -47,8 +47,7 @@ export default function ReportPage() {
   const [active, setActive] = useState("summary");
   const [showTop, setShowTop] = useState(false);
   const [dark, setDark] = useState(false);
-  const [resChart, setResChart] = useState<"mysql" | "portal">("mysql");
-  const [errRung, setErrRung] = useState(1000);
+  const [resChart, setResChart] = useState<"mysql" | "redis" | "mongo" | "gateway" | "portal" | "admin" | "jmeter">("mysql");
 
   const load = (id: string) => {
     fetch(`/api/l2${id ? `?run=${id}` : ""}`).then(async (r) => {
@@ -89,10 +88,12 @@ export default function ReportPage() {
   };
 
   const cells = data?.cells || {};
-  const wc = data?.writeCells || {};
-  const A = (t: number) => cells[key("abA", "false", t)];
-  const B = (t: number) => cells[key("abB", "true", t)];
-  const okSum = (c: any) => (c ? Object.values<any>(c.eps).reduce((s, e) => s + (e.okTps ?? e.tps), 0) : null);
+  const C = (ep: string, v: string, t: number) => cells[key(ep, v, t)];
+  const okSum = (v: string, t: number) =>
+    data ? data.eps.reduce((s: number, ep: string) => {
+      const c = C(ep, v, t);
+      return s + (c ? (c.eps[ep]?.okTps ?? c.eps[ep]?.tps ?? 0) : 0);
+    }, 0) : null;
 
   const pal = dark
     ? { a: "#64748b", b: "#60a5fa", grid: "rgba(255,255,255,0.07)", txt: "#a3a3a3" }
@@ -102,25 +103,26 @@ export default function ReportPage() {
     splitLine: { lineStyle: { color: pal.grid } }, nameTextStyle: { color: pal.txt },
   };
 
-  /* ---------- 扩展性 ---------- */
+  /* ---------- 扩展性(两档) ---------- */
   const scalability = useMemo(() => {
     if (!data) return null;
-    const tot = (f: (t: number) => any) => RUNGS.map((t) => { const v = okSum(f(t)); return v === null ? null : Math.round(v); });
+    const mk = (name: string, color: string, v: string) => ({
+      name, type: "line" as const, symbol: "circle", symbolSize: 9,
+      lineStyle: { width: 2.4 }, itemStyle: { color },
+      data: RUNGS.map((t) => { const s = okSum(v, t); return s === null ? null : Math.round(s); }),
+    });
     return {
       ...ANIM, tooltip: { trigger: "axis" },
       legend: { top: 0, textStyle: { color: pal.txt } },
       grid: { left: 56, right: 24, top: 44, bottom: 40 },
       xAxis: { type: "category", data: RUNGS.map(String), name: "并发", ...axis },
       yAxis: { type: "value", name: "有效 TPS", ...axis },
-      series: [
-        { name: "A 原生基线", type: "line", symbol: "circle", symbolSize: 8, lineStyle: { width: 2.4 }, itemStyle: { color: pal.a }, data: tot(A) },
-        { name: "B 优化栈", type: "line", symbol: "circle", symbolSize: 8, lineStyle: { width: 2.4 }, itemStyle: { color: pal.b }, data: tot(B) },
-      ],
+      series: [mk("A 原生基线", pal.a, "abA"), mk("B 优化栈", pal.b, "abB")],
     };
   }, [data, dark]);
 
-  /* ---------- 分档接口柱状图工厂(延迟=成功样本口径) ---------- */
-  const rungBars = (metric: "tps" | "p50", t: number) => {
+  /* ---------- 分档接口柱状图 ---------- */
+  const rungBars = (t: number, metric: "tps" | "p50") => {
     if (!data) return null;
     const val = (c: any, ep: string) =>
       metric === "tps" ? (c?.eps?.[ep]?.okTps ?? c?.eps?.[ep]?.tps ?? null) : (c?.eps?.[ep]?.okP50 ?? c?.eps?.[ep]?.p50 ?? null);
@@ -132,15 +134,16 @@ export default function ReportPage() {
       xAxis: { type: "category", data: data.eps.map(short), ...axis, axisLabel: { ...axis.axisLabel, rotate: 30, interval: 0, fontSize: 10 } },
       yAxis: { type: "value", name: metric === "tps" ? "有效TPS" : "P50 ms", ...axis },
       series: [
-        { name: "A", type: "bar", barMaxWidth: 18, itemStyle: { color: pal.a }, data: data.eps.map((ep: string) => val(A(t), ep)) },
-        { name: "B", type: "bar", barMaxWidth: 18, itemStyle: { color: pal.b }, data: data.eps.map((ep: string) => val(B(t), ep)) },
+        { name: "A", type: "bar", barMaxWidth: 20, itemStyle: { color: pal.a }, data: data.eps.map((ep: string) => val(C(ep, "abA", t), ep)) },
+        { name: "B", type: "bar", barMaxWidth: 20, itemStyle: { color: pal.b }, data: data.eps.map((ep: string) => val(C(ep, "abB", t), ep)) },
       ],
     };
   };
 
-  /* ---------- 错误率对比 ---------- */
+  /* ---------- 错误率 ---------- */
   const errBars = useMemo(() => {
     if (!data) return null;
+    const t = 1000;
     return {
       ...ANIM,
       tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v}%` },
@@ -149,71 +152,83 @@ export default function ReportPage() {
       xAxis: { type: "category", data: data.eps.map(short), ...axis, axisLabel: { ...axis.axisLabel, rotate: 30, interval: 0, fontSize: 10 } },
       yAxis: { type: "value", name: "错误率 %", ...axis },
       series: [
-        { name: "A", type: "bar", barMaxWidth: 18, itemStyle: { color: pal.a }, data: data.eps.map((ep: string) => Math.round((A(errRung)?.eps?.[ep]?.errPct ?? 0) * 10) / 10) },
-        { name: "B", type: "bar", barMaxWidth: 18, itemStyle: { color: pal.b }, data: data.eps.map((ep: string) => Math.round((B(errRung)?.eps?.[ep]?.errPct ?? 0) * 10) / 10) },
+        { name: "A", type: "bar", barMaxWidth: 20, itemStyle: { color: pal.a }, data: data.eps.map((ep: string) => C(ep, "abA", t)?.eps?.[ep]?.errPct ?? 0) },
+        { name: "B", type: "bar", barMaxWidth: 20, itemStyle: { color: pal.b }, data: data.eps.map((ep: string) => C(ep, "abB", t)?.eps?.[ep]?.errPct ?? 0) },
       ],
     };
-  }, [data, dark, errRung]);
+  }, [data, dark]);
 
-  /* ---------- 资源时序 ---------- */
-  const resSeries = useMemo(() => {
-    if (!data) return null;
-    const cont = resChart === "mysql" ? "mall-mysql" : resChart === "redis" ? "mall-redis" : resChart === "mongo" ? "mall-mongo" : resChart === "gateway" ? "mall-svc-gateway" : resChart === "portal" ? "mall-svc-portal" : resChart === "admin" ? "mall-svc-admin" : "mall-mysql";
+  /* ---------- 资源时序(CPU/内存) ---------- */
+  const CONTAINER_MAP: any = { mysql: "mall-mysql", redis: "mall-redis", mongo: "mall-mongo", gateway: "mall-svc-gateway", portal: "mall-svc-portal", admin: "mall-svc-admin", jmeter: null };
+  const seriesFor = (kind: "cpu" | "mem") => {
+    const cont = CONTAINER_MAP[resChart];
     const phases = Object.keys(cells).sort((a, b) => {
-      const [ia, , ta] = a.split("|"), [ib, , tb] = b.split("|");
-      return +ta - +tb || ia.localeCompare(ib);
-    });
-    const colors = dark ? ["#60a5fa", "#f472b6", "#34d399", "#fbbf24", "#a78bfa", "#f87171", "#22d3ee", "#fb923c"]
-                        : ["#2563eb", "#db2777", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#ea580c"];
-    let ci = 0;
-    return {
-      ...ANIM,
-      tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v}%` },
-      legend: { type: "scroll", top: 0, textStyle: { color: pal.txt } },
-      grid: { left: 52, right: 20, top: 40, bottom: 40 },
-      xAxis: { type: "value", name: "秒", max: 60, ...axis },
-      yAxis: { type: "value", name: "CPU %", max: 220, ...axis },
-      series: phases.flatMap((k) => {
-        const ss = cells[k]?.resSeries;
-        if (!ss) return [];
-        const pts = ss.filter((p: any) => p.container === cont).map((p: any) => [p.dt, p.cpu]);
-        if (!pts.length) return [];
-        const [img, , t] = k.split("|");
-        const color = colors[ci++ % colors.length];
-        return [{ name: `${img === "abA" ? "A" : "B"}·${t}`, type: "line", symbol: "none", smooth: true, lineStyle: { width: 1.6, color }, itemStyle: { color }, data: pts }];
-      }),
-    };
-  }, [data, resChart, dark]);
-
-  /* ---------- 内存时序 ---------- */
-  const memSeries = useMemo(() => {
-    if (!data) return null;
-    const cont = resChart === "mysql" ? "mall-mysql" : resChart === "redis" ? "mall-redis" : resChart === "mongo" ? "mall-mongo" : resChart === "gateway" ? "mall-svc-gateway" : resChart === "portal" ? "mall-svc-portal" : resChart === "admin" ? "mall-svc-admin" : "mall-mysql";
-    const phases = Object.keys(cells).sort((a, b) => {
-      const [ia, va, ta] = a.split("|"), [ib, vb, tb] = b.split("|");
-      return +ta - +tb || ia.localeCompare(ib);
+      const [ea, va, ta] = a.split("|"), [eb, vb, tb] = b.split("|");
+      return +ta - +tb || ea.localeCompare(eb);
     });
     const grays = dark ? ["#f5f5f5", "#a3a3a3", "#737373", "#525252", "#d4d4d4", "#8f8f8f", "#404040", "#e5e5e5"]
-                       : ["#111827", "#6b7280", "#9ca3af", "#374151", "#d1d5db", "#4b5563", "#11182799", "#000000aa"];
+                       : ["#111827", "#6b7280", "#9ca3af", "#374151", "#d1d5db", "#4b5563", "#00000080", "#37415180"];
     let ci = 0;
     return {
       ...ANIM,
-      tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v} MiB` },
+      tooltip: { trigger: "axis", valueFormatter: (v: number) => (kind === "cpu" ? `${v}%` : `${v} MiB`) },
       legend: { type: "scroll", top: 0, textStyle: { color: pal.txt } },
       grid: { left: 60, right: 20, top: 40, bottom: 40 },
-      xAxis: { type: "value", name: "秒", max: 60, ...axis },
-      yAxis: { type: "value", name: "内存 MiB", ...axis },
+      xAxis: { type: "value", name: "相位开始后秒数", max: 60, ...axis },
+      yAxis: { type: "value", name: kind === "cpu" ? "CPU %" : "内存 MiB", ...axis },
+      series: phases.flatMap((k) => {
+        const ss = cells[k]?.resSeries;
+        if (!ss || !cont) return [];
+        const pts = ss.filter((p: any) => p.container === cont).map((p: any) => [p.dt, kind === "cpu" ? p.cpu : p.mem]);
+        if (!pts.length) return [];
+        const [ep, v, t] = k.split("|");
+        const color = grays[ci++ % grays.length];
+        return [{ name: `${short(ep)}·${v === "abA" ? "A" : "B"}·${t}`, type: "line", symbol: "none", smooth: true, lineStyle: { width: 1.5, color }, itemStyle: { color }, data: pts }];
+      }),
+    };
+  };
+  const cpuSeries = useMemo(() => seriesFor("cpu"), [data, resChart, dark]);
+  const memSeries = useMemo(() => seriesFor("mem"), [data, resChart, dark]);
+
+  /* ---------- CPU 占时分布(x=利用率档位, y=占时秒) ---------- */
+  const cpuDist = useMemo(() => {
+    if (!data) return null;
+    const bounds = [0, 25, 50, 75, 100, 125, 150, 175, 200, 1e9];
+    const labels = ["0-25", "25-50", "50-75", "75-100", "100-125", "125-150", "150-175", "175-200", "200+"];
+    const grays = dark ? ["#f5f5f5", "#a3a3a3", "#737373", "#525252", "#d4d4d4", "#8f8f8f", "#404040", "#e5e5e5"]
+                       : ["#111827", "#6b7280", "#9ca3af", "#374151", "#d1d5db", "#4b5563", "#00000080", "#37415180"];
+    const phases = Object.keys(cells).sort((a, b) => {
+      const [ea, va, ta] = a.split("|"), [eb, vb, tb] = b.split("|");
+      return +ta - +tb || ea.localeCompare(eb);
+    });
+    let ci = 0;
+    return {
+      ...ANIM,
+      tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v} 秒` },
+      legend: { type: "scroll", top: 0, textStyle: { color: pal.txt } },
+      grid: { left: 52, right: 16, top: 40, bottom: 40 },
+      xAxis: { type: "category", data: labels, name: "CPU 利用率档位 %", ...axis },
+      yAxis: { type: "value", name: "占时 秒", ...axis },
       series: phases.flatMap((k) => {
         const ss = cells[k]?.resSeries;
         if (!ss) return [];
-        const pts = ss.filter((p: any) => p.container === cont).map((p: any) => [p.dt, p.mem]);
-        if (!pts.length) return [];
-        const [img, , t] = k.split("|");
+        const cont = resChart === "mysql" ? "mall-mysql" : CONTAINER_MAP[resChart];
+        const samples = ss.filter((p: any) => p.container === cont).map((p: any) => p.cpu);
+        if (!samples.length) return [];
+        const buckets = new Array(labels.length).fill(0);
+        for (const cpu of samples) {
+          let bi = labels.length - 1;
+          for (let i = 0; i < bounds.length - 1; i++) {
+            if (cpu >= bounds[i] && cpu < bounds[i + 1]) { bi = i; break; }
+          }
+          buckets[bi] += 5;
+        }
+        const [ep, v, t] = k.split("|");
         const color = grays[ci++ % grays.length];
-        return [{ name: `${img === "abA" ? "A" : "B"}·${t}`, type: "line", symbol: "none", smooth: true, lineStyle: { width: 1.6, color }, itemStyle: { color }, data: pts }];
+        return [{ name: `${short(ep)}·${v === "abA" ? "A" : "B"}·${t}`, type: "bar", stack: "t", barMaxWidth: 26, itemStyle: { color }, data: buckets }];
       }),
     };
-  }, [data, resChart, dark]);
+  }, [data, dark, resChart]);
 
   if (err) {
     return <div className="shell items-center justify-center"><div className="text-sm text-muted-foreground">{err}</div></div>;
@@ -226,7 +241,6 @@ export default function ReportPage() {
 
   return (
     <div className="shell">
-      {/* ---------- 侧栏: 无样式文本按钮 ---------- */}
       <nav className="sidenav">
         <div className="brand">压测对比</div>
         {SECTIONS.map(([id, label]) => (
@@ -251,34 +265,40 @@ export default function ReportPage() {
             {/* ============ 总体TPS ============ */}
             <section id="summary" className="l2section l2fade scroll-mt-24 pt-2">
               <h2 className="ink-title text-lg font-bold tracking-widest">总体TPS</h2>
-
-              <h3 className="mt-6 text-sm font-semibold text-muted-foreground">全档位趋势 · 有效TPS（成功请求/秒）</h3>
-              <div className="mt-3 rounded-xl border bg-card p-4"><Chart option={scalability} height={360} /></div>
-
-              <h3 className="mt-8 text-sm font-semibold text-muted-foreground">分接口错误率对比</h3>
-              <div className="mt-3 flex items-center gap-3">
-                <div className="seg">
-                  {RUNGS.map((t) => (
-                    <button key={t} className={cn(errRung === t && "on")} onClick={() => setErrRung(t)}>{t}</button>
-                  ))}
-                </div>
-                <span className="text-xs text-muted-foreground">并发档位</span>
+              <p className="mt-2 text-xs text-muted-foreground">
+                单接口隔离压测 · 11 接口 × 500/1000 并发 · 45s 采样 · 有效TPS = 成功请求/秒 ·
+                A = 原作者整套（JDK 17 · SB 3.5.14） B = 优化整套（JDK 25 · SB 4.0.8 · 索引 · VT）
+              </p>
+              <div className="mt-4 rounded-xl border bg-card p-4"><Chart option={scalability} height={360} /></div>
+              <div className="mt-4 overflow-x-auto rounded-xl border bg-card p-2">
+                <table className="dtable">
+                  <thead>
+                    <tr><th>并发</th><th className="text-right">A 有效TPS</th><th className="text-right">B 有效TPS</th><th className="text-right">B/A</th></tr>
+                  </thead>
+                  <tbody>
+                    {byRung.map((r: any) => (
+                      <tr key={r.t}>
+                        <td className="l2num">{r.t}</td>
+                        <td className="l2num text-right">{num(r.tpsA, 1)}</td>
+                        <td className="l2num text-right">{num(r.tpsB, 1)}</td>
+                        <td className="text-right"><Badge2 v={r.bOverA} /></td>
+                      </tr>
+                    ))}
+                    {!byRung.length && <tr><td colSpan={4} className="text-center text-muted-foreground">暂无数据</td></tr>}
+                  </tbody>
+                </table>
               </div>
-              <div className="mt-3 rounded-xl border bg-card p-3"><Chart option={errBars} height={300} /></div>
 
-              <h3 className="mt-8 text-sm font-semibold text-muted-foreground">分接口错误率 / 超时明细（并发 {errRung}）</h3>
+              <h3 className="mt-8 text-sm font-semibold text-muted-foreground">分接口错误率对比（并发 1000 · 极限档）</h3>
+              <div className="mt-3 rounded-xl border bg-card p-3"><Chart option={errBars} height={300} /></div>
               <div className="mt-3 overflow-x-auto rounded-xl border bg-card p-2">
                 <table className="dtable">
                   <thead>
-                    <tr>
-                      <th>接口</th>
-                      <th className="text-right">A 错误%</th><th className="text-right">B 错误%</th>
-                      <th className="text-right">A 超时次数</th><th className="text-right">B 超时次数</th>
-                    </tr>
+                    <tr><th>接口</th><th className="text-right">A 错误%</th><th className="text-right">B 错误%</th><th className="text-right">A 超时</th><th className="text-right">B 超时</th></tr>
                   </thead>
                   <tbody>
                     {data.eps.map((ep: string) => {
-                      const a = A(errRung)?.eps?.[ep], b = B(errRung)?.eps?.[ep];
+                      const a = C(ep, "abA", 1000)?.eps?.[ep], b = C(ep, "abB", 1000)?.eps?.[ep];
                       return (
                         <tr key={ep}>
                           <td className="whitespace-nowrap">{ep}</td>
@@ -296,43 +316,31 @@ export default function ReportPage() {
 
             {/* ============ 吞吐 ============ */}
             <section id="throughput" className="l2section l2fade mt-14 scroll-mt-24">
-              <h2 className="ink-title text-lg font-bold tracking-widest">吞吐</h2>
-
-              <h3 className="mt-5 text-sm font-semibold text-muted-foreground">分接口有效TPS · 每档一张</h3>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                {RUNGS.map((t) => (
-                  <div key={`tps${t}`} className="rounded-xl border bg-card p-3">
-                    <div className="mb-1 text-xs font-medium text-muted-foreground">并发 {t}</div>
-                    <Chart option={rungBars("tps", t)} height={280} />
-                  </div>
-                ))}
-              </div>
-
-              <h3 className="mt-8 text-sm font-semibold text-muted-foreground">分接口 P50 · 每档一张</h3>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                {RUNGS.map((t) => (
-                  <div key={`p${t}`} className="rounded-xl border bg-card p-3">
-                    <div className="mb-1 text-xs font-medium text-muted-foreground">并发 {t}</div>
-                    <Chart option={rungBars("p50", t)} height={280} />
-                  </div>
-                ))}
-              </div>
+              <h2 className="ink-title text-lg font-bold tracking-widest">吞吐 · 分接口</h2>
+              {RUNGS.map((t) => (
+                <Fragment key={t}>
+                  <h3 className="mt-6 text-sm font-semibold text-muted-foreground">并发 {t} · 有效TPS</h3>
+                  <div className="mt-2 rounded-xl border bg-card p-3"><Chart option={rungBars(t, "tps")} height={300} /></div>
+                  <h3 className="mt-4 text-sm font-semibold text-muted-foreground">并发 {t} · P50（成功样本口径）</h3>
+                  <div className="mt-2 rounded-xl border bg-card p-3"><Chart option={rungBars(t, "p50")} height={300} /></div>
+                </Fragment>
+              ))}
             </section>
 
             {/* ============ SQL 层 ============ */}
             <section id="sql" className="l2section l2fade mt-14 scroll-mt-24">
               <h2 className="ink-title text-lg font-bold tracking-widest">SQL 层 · digest 差分</h2>
-              <p className="mt-2 text-xs text-muted-foreground">performance_schema.events_statements_summary_by_digest 三点快照差分（A 组前/A 组末/B 组末），按总耗时排序 · SQL 文本 A/B 天然不同可分开归因</p>
-              {[["A 原生基线", "A"], ["B 优化栈", "B"]].map(([label, k]) => (
-                <div key={k} className="mt-5">
-                  <h3 className="text-sm font-semibold text-muted-foreground">{label} · Top SQL（阶梯期间累计）</h3>
+              <p className="mt-2 text-xs text-muted-foreground">performance_schema 按变体差分（变体起点 TRUNCATE 后累计）· 按总耗时排序 · 逻辑相同的 SQL 在 A/B 中文本不同（Example vs MP）故分列对照</p>
+              {[["A 原生基线", "abA"], ["B 优化栈", "abB"]].map(([label, v]) => (
+                <div key={v} className="mt-5">
+                  <h3 className="text-sm font-semibold text-muted-foreground">{label} · Top SQL（该变体阶梯期间累计）</h3>
                   <div className="mt-2 overflow-x-auto rounded-xl border bg-card p-2">
                     <table className="dtable">
                       <thead>
                         <tr><th>SQL</th><th className="text-right">次数</th><th className="text-right">总耗时 s</th><th className="text-right">均耗 ms</th><th className="text-right">扫描行数</th></tr>
                       </thead>
                       <tbody>
-                        {(data.sql?.[k] || []).map((s: any, i: number) => (
+                        {(data.sql?.[v] || []).map((s: any, i: number) => (
                           <tr key={i}>
                             <td className="whitespace-normal break-all text-left font-mono text-[11px]">{s.sql}</td>
                             <td className="l2num text-right">{s.count}</td>
@@ -341,45 +349,12 @@ export default function ReportPage() {
                             <td className="l2num text-right">{s.examined}</td>
                           </tr>
                         ))}
-                        {!(data.sql?.[k] || []).length && <tr><td colSpan={5} className="text-center text-muted-foreground">无快照数据</td></tr>}
+                        {!(data.sql?.[v] || []).length && <tr><td colSpan={5} className="text-center text-muted-foreground">无快照数据</td></tr>}
                       </tbody>
                     </table>
                   </div>
                 </div>
               ))}
-            </section>
-
-            {/* ============ 服务端延迟 ============ */}
-            <section id="server" className="l2section l2fade mt-14 scroll-mt-24">
-              <h2 className="text-base font-semibold">服务端延迟 · P95 (ms)</h2>
-              <p className="mt-2 text-xs text-muted-foreground">Prometheus 直方图按相位窗口取值（JMeter 客户端视角之外的另一半）· /product/list 与深分页、/product/detail 与批量同 URI 合并统计</p>
-              <div className="mt-4 overflow-x-auto rounded-xl border bg-card p-2">
-                <table className="dtable">
-                  <thead>
-                    <tr>
-                      <th>相位</th>
-                      {data.eps.map((ep: string) => <th key={ep} className="text-right">{short(ep)}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.keys(cells).sort((a, b) => {
-                      const [ia, , ta] = a.split("|"), [ib, , tb] = b.split("|");
-                      return +ta - +tb || ia.localeCompare(ib);
-                    }).map((k) => {
-                      const [img, vt, t] = k.split("|");
-                      const sp = cells[k]?.serverP95?.portal || {};
-                      return (
-                        <tr key={k}>
-                          <td className="l2num whitespace-nowrap">{img === "abA" ? "A" : "B"} · {t}{vt === "true" ? " · VT" : ""}</td>
-                          {data.eps.map((ep: string) => (
-                            <td key={ep} className="l2num text-right">{sp[ep] != null ? num(sp[ep], 0) : "—"}</td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
             </section>
 
             {/* ============ 资源消耗 ============ */}
@@ -392,14 +367,18 @@ export default function ReportPage() {
                   ))}
                 </div>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">5s 粒度全容器采样 · 图例可开关（A·并发 / B·并发·VT）</p>
+              <p className="mt-2 text-xs text-muted-foreground">5s 粒度全容器采样 · CPU 占时分布: x=利用率档位, y=该档位累计时长（秒）· 图例可开关</p>
+              <div className="mt-4 rounded-xl border bg-card p-3">
+                <div className="mb-1 text-xs font-medium text-muted-foreground">CPU 占时分布（{CONTAINER_LABEL[resChart]}）</div>
+                <Chart option={cpuDist} height={340} />
+              </div>
               <div className="mt-4 rounded-xl border bg-card p-3">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">CPU 时序（%）</div>
-                <Chart option={resSeries} height={380} />
+                <Chart option={cpuSeries} height={320} />
               </div>
               <div className="mt-4 rounded-xl border bg-card p-3">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">内存时序（MiB）</div>
-                <Chart option={memSeries} height={300} />
+                <Chart option={memSeries} height={280} />
               </div>
             </section>
           </div>
@@ -413,5 +392,16 @@ export default function ReportPage() {
         </button>
       )}
     </div>
+  );
+}
+
+const CONTAINER_LABEL: any = { mysql: "MySQL", redis: "Redis", mongo: "Mongo", gateway: "Gateway", portal: "Portal", admin: "Admin", jmeter: "JMeter" };
+
+function Badge2({ v }: { v: number }) {
+  return (
+    <span className={cn("l2num inline-block rounded-md px-2 py-0.5 text-xs font-semibold",
+      v >= 100 ? "bg-emerald-600/10 text-emerald-600 dark:text-emerald-500" : "bg-red-600/10 text-red-600 dark:text-red-500")}>
+      {v.toFixed(1)}%
+    </span>
   );
 }
