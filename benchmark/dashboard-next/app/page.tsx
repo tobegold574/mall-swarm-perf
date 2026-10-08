@@ -158,8 +158,6 @@ export default function ReportPage() {
     };
   }, [data, dark]);
 
-  /* ---------- 资源时序(CPU/内存) ---------- */
-    const memSeries = useMemo(() => seriesFor("mem"), [data, resChart, dark]);
 
   /* ---------- CPU 占时分布: x=利用率, y=累计时长, A/B 双线 ---------- */
   const cpuDist = useMemo(() => {
