@@ -140,7 +140,7 @@ function HeadlineCards({ s, tag }) {
   const tps = s.read.reduce((x, a) => x + a.tps_med, 0);
   const err = Math.max(...s.read.map((a) => a.err_med));
   const oversell = s.write.some((w) => w.oversell);
-  const sqls = s.write.map((w) => w.per_order_sql).sort((x, y) => x - y);
+  const sqls = s.write.map((w) => w.sql_per_req).sort((x, y) => x - y);
   return (
     <div>
       <span className={tag === "A" ? "tagA" : "tagB"}>{tag}（{s.generated_at}）</span>
@@ -148,7 +148,7 @@ function HeadlineCards({ s, tag }) {
         <div className="card"><div className="v">{tps.toFixed(1)}</div><div className="l">合计TPS(中位之和)</div></div>
         <div className="card"><div className="v">{err.toFixed(2)}%</div><div className="l">读最高错误率(中位)</div></div>
         <div className="card"><div className={"v " + (oversell ? "bad" : "")}>{oversell ? "超卖" : "正常"}</div><div className="l">写并发判定</div></div>
-        <div className="card"><div className="v">{sqls.length ? sqls[Math.floor(sqls.length / 2)].toFixed(1) : "-"}</div><div className="l">每单SQL(中位)</div></div>
+        <div className="card"><div className="v">{sqls.length ? sqls[Math.floor(sqls.length / 2)].toFixed(1) : "-"}</div><div className="l">写SQL/请求(中位)</div></div>
       </div>
     </div>
   );
@@ -186,11 +186,11 @@ function DeltaTable({ a, b }) {
 function WriteTable({ s }) {
   return (
     <table>
-      <thead><tr><th>轮</th><th>成功</th><th>落库</th><th>失败</th><th>lock_stock终态</th><th>每单SQL</th><th>判定</th></tr></thead>
+      <thead><tr><th>轮</th><th>成功</th><th>落库</th><th>失败</th><th>lock_stock终态</th><th>SQL/请求</th><th>判定</th></tr></thead>
       <tbody>{s.write.map((w) => (
         <tr key={w.round}>
           <td>{w.round}</td><td>{w.success}</td><td>{w.db_orders}</td><td>{w.failed}</td>
-          <td>{w.final_lock_stock}</td><td>{w.per_order_sql}</td>
+          <td>{w.final_lock_stock}</td><td>{w.sql_per_req}</td>
           <td className={w.oversell ? "bad" : "good"}>{w.oversell ? "超卖" : "正常"}</td>
         </tr>
       ))}</tbody>
@@ -207,15 +207,15 @@ function WriteTableCompare({ a, b }) {
       轮: i + 1,
       成功A_B: `${x ? x.success : "-"} → ${y ? y.success : "-"}`,
       lock_stockA_B: `${x ? x.final_lock_stock : "-"} → ${y ? y.final_lock_stock : "-"}`,
-      每单SQLA_B: `${x ? x.per_order_sql : "-"} → ${y ? y.per_order_sql : "-"}`,
+      每请求SQLA_B: `${x ? x.sql_per_req : "-"} → ${y ? y.sql_per_req : "-"}`,
       判定: `${x ? (x.oversell ? "超卖" : "正常") : "-"} → ${y ? (y.oversell ? "超卖" : "正常") : "-"}`,
     });
   }
   return (
     <table>
-      <thead><tr><th>轮</th><th>成功 A→B</th><th>lock_stock A→B</th><th>每单SQL A→B</th><th>判定 A→B</th></tr></thead>
+      <thead><tr><th>轮</th><th>成功 A→B</th><th>lock_stock A→B</th><th>写SQL/请求 A→B</th><th>判定 A→B</th></tr></thead>
       <tbody>{rows.map((r) => (
-        <tr key={r.轮}><td>{r.轮}</td><td>{r.成功A_B}</td><td>{r.lock_stockA_B}</td><td>{r.每单SQLA_B}</td><td>{r.判定}</td></tr>
+        <tr key={r.轮}><td>{r.轮}</td><td>{r.成功A_B}</td><td>{r.lock_stockA_B}</td><td>{r["每请求SQLA_B"]}</td><td>{r.判定}</td></tr>
       ))}</tbody>
     </table>
   );
@@ -292,7 +292,7 @@ export default function Page() {
   return (
     <div className="wrap">
       <h1>mall-swarm 压测报告看板</h1>
-      <p className="meta">Next.js + ECharts · 数据源 /data/suite_*/suite.json · 共 {suites.length} 份套件 · A=前(基线) B=后(改后)，同主题 A 图在上 B 图在下，共享 Y 轴</p>
+      <p className="meta">Next.js + ECharts · 数据源 /data/suite_*/suite.json · 共 {suites.length} 份套件 · A=前(基线) B=后(改后)，同主题 A 图在上 B 图在下，共享 Y 轴 · <a href="/l2" className="underline decoration-dotted underline-offset-4">L2 全组合阶梯报告 →</a></p>
 
       <div style={{ display: "flex", gap: 16, margin: "16px 0" }}>
         <label>A（前）：<select value={aKey} onChange={(e) => setAKey(e.target.value)}>

@@ -231,18 +231,18 @@ services:
           memory: 1g
 
   dashboard:
-    image: node:22-alpine
+    build:
+      context: ../../benchmark/dashboard-next
+      dockerfile: Dockerfile.dashboard
+    image: mall/dashboard:latest
     container_name: mall-dashboard
     profiles: ["report"]
-    working_dir: /app
-    command: sh -c "if [ ! -d node_modules/next ]; then npm install --registry=https://registry.npmmirror.com --no-audit --no-fund; fi && npm run dev -- -H 0.0.0.0"
     ports:
       - "3000:3000"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
     volumes:
-      - ../../benchmark/dashboard-next:/app
-      - dashboard-node-modules:/app/node_modules
+      - ../../benchmark/dashboard-next/app:/app/app
       - ../../benchmark/results:/data:ro
     deploy:
       resources:
