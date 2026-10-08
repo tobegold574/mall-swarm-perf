@@ -226,7 +226,7 @@ export default function ReportPage() {
       grid: { left: 56, right: 24, top: 44, bottom: 56 },
       xAxis: { type: "category", data: labels, name: "CPU 利用率 %", ...axis, axisLabel: { ...axis.axisLabel, rotate: 30 } },
       yAxis: { type: "value", name: "累计时长 秒", ...axis },
-      series: [mk(`${CONTAINER_LABEL[resChart]}/A`, pal.a, "abA"), mk(`${CONTAINER_LABEL[resChart]}/B`, pal.b, "abB")],
+      series: [mk(`${CONTAINER_LABEL[resChart]}/A`, "abA", pal.a), mk(`${CONTAINER_LABEL[resChart]}/B`, "abB", pal.b)],
     };
   }, [data, dark, resChart]);
 
