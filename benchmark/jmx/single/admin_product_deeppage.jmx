@@ -34,7 +34,7 @@
           <stringProp name="HTTPSampler.port">8201</stringProp>
           <stringProp name="HTTPSampler.connect_timeout">10000</stringProp>
           <stringProp name="HTTPSampler.response_timeout">45000</stringProp>
-          <stringProp name="HTTPSampler.path">/mall-admin/product/list?pageNum=${__jexl3(9000 - (__counter(FALSE) % 8000))}&amp;pageSize=10</stringProp>
+          <stringProp name="HTTPSampler.path">/mall-admin/product/list?pageNum=${__jexl3(${__counter(FALSE)} % 8000 + 1001)}&amp;pageSize=10</stringProp>
           <stringProp name="HTTPSampler.method">GET</stringProp>
           <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
