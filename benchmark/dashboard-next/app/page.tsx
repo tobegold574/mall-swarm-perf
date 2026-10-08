@@ -281,40 +281,6 @@ export default function ReportPage() {
                   </tbody>
                 </table>
               </div>
-
-              <h3 className="mt-8 text-sm font-semibold text-muted-foreground">全指标 Δ% 汇总</h3>
-              <div className="mt-3 overflow-x-auto rounded-xl border bg-card p-2">
-                <table className="dtable">
-                  <thead><tr><th>指标</th><th>A 原生</th><th>B 优化栈</th><th>Δ% (B/A)</th></tr></thead>
-                  <tbody>
-                    <tr className="group-row"><td colSpan={4}>吞吐（有效 TPS）</td></tr>
-                    {RUNGS.map((t) => (
-                      <tr key={`t${t}`}>
-                        <td>├ 总有效 TPS @并发{t}</td>
-                        <td className="l2num">{num(byRung.find((r: any) => r.t === t && !r.vt)?.tpsA, 1)}</td>
-                        <td className="l2num">{num(byRung.find((r: any) => r.t === t && r.vt)?.tpsB, 1)}</td>
-                        <td><Delta v={pct(byRung.find((r: any) => r.t === t && !r.vt)?.tpsA, byRung.find((r: any) => r.t === t && r.vt)?.tpsB)} /></td>
-                      </tr>
-                    ))}
-                    {data.eps.map((ep: string) => (
-                      <Fragment key={ep}>
-                        <tr>
-                          <td>├ {short(ep)} · 有效TPS @1000</td>
-                          <td className="l2num">{num(A(1000)?.eps?.[ep]?.okTps, 1)}</td>
-                          <td className="l2num">{num(B(1000)?.eps?.[ep]?.okTps, 1)}</td>
-                          <td><Delta v={pct(A(1000)?.eps?.[ep]?.okTps, B(1000)?.eps?.[ep]?.okTps)} /></td>
-                        </tr>
-                        <tr>
-                          <td>├ {short(ep)} · P50 @1000</td>
-                          <td className="l2num">{num(A(1000)?.eps?.[ep]?.p50, 0)}</td>
-                          <td className="l2num">{num(B(1000)?.eps?.[ep]?.p50, 0)}</td>
-                          <td><Delta v={pct(A(1000)?.eps?.[ep]?.p50, B(1000)?.eps?.[ep]?.p50)} invert /></td>
-                        </tr>
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </section>
 
             {/* ============ 吞吐 ============ */}
