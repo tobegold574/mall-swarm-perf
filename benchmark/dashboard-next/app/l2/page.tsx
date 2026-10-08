@@ -34,19 +34,20 @@ const SECTIONS = [
   ["summary", "总体对比"],
   ["scalability", "并发扩展性"],
   ["latency", "接口延迟矩阵"],
-  ["vt", "虚拟线程效应"],
+  ["vt", "VT 增量归因"],
+  ["write", "写路径(购物车/收藏)"],
   ["resource", "资源消耗"],
   ["errors", "错误与超时"],
   ["notes", "数据说明"],
 ];
-const C = { ink: "#171717", mid: "#737373", light: "#a3a3a3", grid: "#ececec" };
+const C = { ink: "#171717", mid: "#737373", light: "#a3a3a3" };
 const AXIS = {
   axisLine: { lineStyle: { color: "#d4d4d4" } },
   axisLabel: { color: "#525252" },
   splitLine: { lineStyle: { color: "#ececec" } },
 };
 const ANIM = { animationDuration: 600, animationEasing: "cubicOut" as const };
-const key = (img: string, vt: boolean, t: number) => `${img}|${vt}|${t}`;
+const key = (img: string, vt: boolean | string, t: number) => `${img}|${vt}|${t}`;
 
 function num(x: number | undefined, digits = 0, suffix = "") {
   if (x === undefined || x === null || isNaN(x)) return "—";
@@ -58,7 +59,6 @@ export default function L2Page() {
   const [err, setErr] = useState<string | null>(null);
   const [active, setActive] = useState("summary");
   const [showTop, setShowTop] = useState(false);
-  const [latVt, setLatVt] = useState(false);
   const [resChart, setResChart] = useState<"mysql" | "portal">("mysql");
 
   useEffect(() => {
@@ -87,23 +87,20 @@ export default function L2Page() {
   }, [data]);
 
   const cells = data?.cells || {};
+  const wcells = data?.writeCells || {};
 
-  /* ---------- 派生数据 ---------- */
+  /* ---------- 派生: 扩展性曲线(A 原生单线 + B 双态) ---------- */
   const scalability = useMemo(() => {
     if (!data) return null;
-    const mk = (img: string, vt: boolean) => ({
-      name: `${img === "abA" ? "A原生" : "B优化"}·VT${vt ? "开" : "关"}`,
-      type: "line" as const,
-      symbol: "circle",
-      symbolSize: 7,
-      lineStyle: { width: 2, type: vt ? "dashed" : "solid" as const },
-      itemStyle: { color: img === "abA" ? (vt ? C.light : C.ink) : vt ? C.light : C.mid },
-      data: RUNGS.map((t) => {
-        const c = cells[key(img, vt, t)];
-        if (!c) return null;
-        return Math.round(Object.values<any>(c.eps).reduce((s, e) => s + e.tps, 0));
-      }),
+    const mk = (name: string, color: string, dash: boolean, fn: (t: number) => number | null) => ({
+      name, type: "line" as const, symbol: "circle", symbolSize: 7,
+      lineStyle: { width: 2, type: dash ? "dashed" : "solid" },
+      itemStyle: { color }, data: RUNGS.map(fn),
     });
+    const tot = (k: string) => {
+      const c = cells[k];
+      return c ? Math.round(Object.values<any>(c.eps).reduce((s, e) => s + e.tps, 0)) : null;
+    };
     return {
       ...ANIM,
       tooltip: { trigger: "axis" },
@@ -111,19 +108,22 @@ export default function L2Page() {
       grid: { left: 56, right: 24, top: 44, bottom: 40 },
       xAxis: { type: "category", data: RUNGS.map(String), name: "并发", ...AXIS },
       yAxis: { type: "value", name: "总 TPS", ...AXIS },
-      series: [mk("abA", false), mk("abB", false), mk("abA", true), mk("abB", true)],
+      series: [
+        mk("A 原生基线(JDK17·无VT)", C.ink, false, (t) => tot(key("abA", "false", t))),
+        mk("B 优化·VT关", C.mid, true, (t) => tot(key("abB", "false", t))),
+        mk("B 优化·VT开", "#525252", false, (t) => tot(key("abB", "true", t))),
+      ],
     };
   }, [data]);
 
+  /* ---------- 派生: VT 增量(B 开 vs 关) ---------- */
   const vtDelta = useMemo(() => {
     if (!data) return null;
-    // 每个(变体,档位): 各接口 P50 VT开相对VT关 的变化%( 正=恶化 )
-    const mk = (img: string, t: number, name: string, color: string) => ({
-      name, type: "bar" as const, barMaxWidth: 14,
-      itemStyle: { color },
+    const mk = (t: number, name: string, color: string) => ({
+      name, type: "bar" as const, barMaxWidth: 16, itemStyle: { color },
       data: data.eps.map((ep: string) => {
-        const off = cells[key(img, "false", t)]?.eps?.[ep]?.p50;
-        const on = cells[key(img, "true", t)]?.eps?.[ep]?.p50;
+        const off = cells[key("abB", "false", t)]?.eps?.[ep]?.p50;
+        const on = cells[key("abB", "true", t)]?.eps?.[ep]?.p50;
         if (!off || !on) return null;
         return Math.round((on / off - 1) * 100);
       }),
@@ -135,19 +135,17 @@ export default function L2Page() {
       grid: { left: 56, right: 24, top: 44, bottom: 92 },
       xAxis: { type: "category", data: data.eps.map((e: string) => e.replace(/^(admin|portal)_/, "")), ...AXIS, axisLabel: { ...AXIS.axisLabel, rotate: 32, interval: 0 } },
       yAxis: { type: "value", name: "VT开 P50 变化%", ...AXIS },
-      series: [
-        mk("abA", 100, "A·100", C.light), mk("abA", 1000, "A·1000", C.ink),
-        mk("abB", 100, "B·100", "#c9c9c9"), mk("abB", 1000, "B·1000", C.mid),
-      ],
+      series: [mk(100, "并发100", C.light), mk(500, "并发500", C.mid), mk(1000, "并发1000", C.ink)],
     };
   }, [data]);
 
+  /* ---------- 派生: 资源时序 ---------- */
   const resSeries = useMemo(() => {
     if (!data) return null;
     const cont = resChart === "mysql" ? "mall-mysql" : "mall-svc-portal";
     const phases = Object.keys(cells).sort((a, b) => {
       const [ia, va, ta] = a.split("|"), [ib, vb, tb] = b.split("|");
-      return +ta - +tb || ia.localeCompare(ib) || (va === "true" ? 1 : -1) - (vb === "true" ? 1 : -1);
+      return +ta - +tb || ia.localeCompare(ib);
     });
     const colors = ["#171717", "#737373", "#a3a3a3", "#d4d4d4", "#484848", "#8f8f8f", "#b8b8b8", "#dcdcdc"];
     let ci = 0;
@@ -165,33 +163,23 @@ export default function L2Page() {
         if (!pts.length) return [];
         const [img, vt, t] = k.split("|");
         const color = colors[ci++ % colors.length];
-        return [{
-          name: `${img === "abA" ? "A" : "B"}·${t}·VT${vt === "true" ? "开" : "关"}`,
-          type: "line", symbol: "none", smooth: true,
-          lineStyle: { width: 1.6, color }, itemStyle: { color }, data: pts,
-        }];
+        const label = img === "abA" ? `A·${t}` : `B·${t}·VT${vt === "true" ? "开" : "关"}`;
+        return [{ name: label, type: "line", symbol: "none", smooth: true, lineStyle: { width: 1.6, color }, itemStyle: { color }, data: pts }];
       }),
     };
   }, [data, resChart]);
 
   if (err) {
-    return (
-      <div className="l2shell flex min-h-screen items-center justify-center">
-        <div className="text-sm text-muted-foreground">{err}</div>
-      </div>
-    );
+    return <div className="l2shell flex min-h-screen items-center justify-center"><div className="text-sm text-muted-foreground">{err}</div></div>;
   }
   if (!data) {
-    return (
-      <div className="l2shell flex min-h-screen items-center justify-center">
-        <div className="text-sm text-muted-foreground">加载中...</div>
-      </div>
-    );
+    return <div className="l2shell flex min-h-screen items-center justify-center"><div className="text-sm text-muted-foreground">加载中...</div></div>;
   }
 
   const fresh = data.phases?.length || 0;
   const byRung = data.byRung || [];
-  const bWins = byRung.filter((r: any) => r.bOverA >= 100).length;
+  const rungOn = (t: number) => byRung.find((r: any) => r.t === t && r.vt);
+  const rungOff = (t: number) => byRung.find((r: any) => r.t === t && !r.vt);
 
   return (
     <div className="l2shell flex min-h-screen">
@@ -212,64 +200,60 @@ export default function L2Page() {
           <header id="top" className="l2fade">
             <h1 className="text-xl font-bold tracking-tight">L2 全组合阶梯对比报告</h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              A=abA 原作者基线 · B=abB 优化版 · 变体 × 并发 100/200/500/1000 × VT 开/关 ·
-              采样窗口 45s · MySQL 2 核配额 · 生成于 {data.generatedAt} · 相位 {fresh}/{data.expected}
+              A = 原生基线（原作者代码 · JDK 17 · SB 3.5.14 · 无 VT 能力）·
+              B = 优化栈（迁移 + JDK 25 · SB 4.0.8 · 索引 · VT）·
+              并发 100/200/500/1000 · 采样窗口 45s · MySQL 2 核 · 生成于 {data.generatedAt} · 相位 {fresh}/{data.expected}
             </p>
           </header>
 
-          {/* ============ 总体对比 ============ */}
+          {/* ============ 总体对比: A → B·VT关 → B·VT开 ============ */}
           <section id="summary" className="l2section l2fade mt-8 scroll-mt-6">
             <h2 className="text-base font-semibold border-l-2 border-primary pl-2.5">总体对比差距</h2>
+            <p className="mt-1 text-xs text-muted-foreground">归因链：A → B·VT关 = 框架迁移+代码优化+索引 的收益；B·VT关 → B·VT开 = 虚拟线程的收益</p>
             <div className="mt-4 grid grid-cols-4 gap-3">
-              {byRung.filter((r: any) => !r.vt).map((r: any) => (
-                <Card key={r.t} className="transition-transform hover:-translate-y-0.5">
-                  <CardHeader className="p-4 pb-2">
-                    <CardDescription className="text-xs">并发 {r.t} · VT关 · B/A 总吞吐</CardDescription>
-                    <CardTitle className="l2num mt-1 text-2xl">
-                      {num(r.bOverA, 1, "%")}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 text-xs text-muted-foreground l2num">
-                    A {num(r.tpsA, 1)} → B {num(r.tpsB, 1)} TPS
-                  </CardContent>
-                </Card>
-              ))}
+              {RUNGS.map((t) => {
+                const on = rungOn(t), off = rungOff(t);
+                return (
+                  <Card key={t} className="transition-transform hover:-translate-y-0.5">
+                    <CardHeader className="p-4 pb-2">
+                      <CardDescription className="text-xs">并发 {t} · B 完整栈 / A</CardDescription>
+                      <CardTitle className="l2num mt-1 text-2xl">{on ? num(on.bOverA, 1, "%") : "—"}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 text-xs text-muted-foreground l2num">
+                      <div>A {num(off?.tpsA, 0)}</div>
+                      <div>B·VT关 {num(off?.tpsB, 0)} · B·VT开 {num(on?.tpsB, 0)}</div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
-            <Card className="mt-4">
-              <CardContent className="p-5">
-                <div className="text-sm leading-relaxed">
-                  {byRung.length ? (
-                    <>
-                      八组相位（4 档并发 × VT 开/关）中，B 总吞吐不低于 A 的有{" "}
-                      <span className="l2num font-semibold">{bWins}</span> 组；
-                      单接口延迟判定见<a href="#latency" className="underline decoration-dotted underline-offset-4">延迟矩阵</a>，
-                      结论受共享开发机噪声影响，配对相位（相邻窗口）的差值才可归因。
-                    </>
-                  ) : "无数据"}
-                </div>
-              </CardContent>
-            </Card>
             <Table className="mt-4">
               <TableHeader>
                 <TableRow>
-                  <TableHead>并发</TableHead><TableHead>VT</TableHead>
-                  <TableHead className="text-right">A 总 TPS</TableHead>
-                  <TableHead className="text-right">B 总 TPS</TableHead>
-                  <TableHead className="text-right">B/A</TableHead>
+                  <TableHead>并发</TableHead>
+                  <TableHead className="text-right">A 原生</TableHead>
+                  <TableHead className="text-right">B·VT关</TableHead>
+                  <TableHead className="text-right">B·VT开</TableHead>
+                  <TableHead className="text-right">迁移+代码收益<br />(B关/A)</TableHead>
+                  <TableHead className="text-right">VT收益<br />(B开/B关)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {byRung.map((r: any) => (
-                  <TableRow key={`${r.t}-${r.vt}`}>
-                    <TableCell className="l2num">{r.t}</TableCell>
-                    <TableCell>{r.vt ? "开" : "关"}</TableCell>
-                    <TableCell className="l2num text-right">{num(r.tpsA, 1)}</TableCell>
-                    <TableCell className="l2num text-right">{num(r.tpsB, 1)}</TableCell>
-                    <TableCell className="l2num text-right">
-                      <Badge variant={r.bOverA >= 100 ? "good" : "bad"}>{num(r.bOverA, 1, "%")}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {RUNGS.map((t) => {
+                  const off = rungOff(t), on = rungOn(t);
+                  const code = off && off.tpsB && off.tpsA ? (off.tpsB / off.tpsA) * 100 : null;
+                  const vt = off && on && off.tpsB ? (on.tpsB / off.tpsB) * 100 : null;
+                  return (
+                    <TableRow key={t}>
+                      <TableCell className="l2num">{t}</TableCell>
+                      <TableCell className="l2num text-right">{num(off?.tpsA, 0)}</TableCell>
+                      <TableCell className="l2num text-right">{num(off?.tpsB, 0)}</TableCell>
+                      <TableCell className="l2num text-right">{num(on?.tpsB, 0)}</TableCell>
+                      <TableCell className="l2num text-right">{code !== null ? <Badge variant={code >= 100 ? "good" : "bad"}>{num(code, 1, "%")}</Badge> : "—"}</TableCell>
+                      <TableCell className="l2num text-right">{vt !== null ? <Badge variant={vt >= 100 ? "good" : "bad"}>{num(vt, 1, "%")}</Badge> : "—"}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </section>
@@ -277,25 +261,14 @@ export default function L2Page() {
           {/* ============ 并发扩展性 ============ */}
           <section id="scalability" className="l2section l2fade mt-12 scroll-mt-6">
             <h2 className="text-base font-semibold border-l-2 border-primary pl-2.5">并发扩展性</h2>
-            <p className="mt-1 text-xs text-muted-foreground">10 接口混合负载下的全链路总吞吐（实线=VT关，虚线=VT开）</p>
+            <p className="mt-1 text-xs text-muted-foreground">10 接口混合负载总吞吐 · A 为原生单线（无 VT 维度）· B 虚线=VT关、实线=VT开</p>
             <Card className="mt-4"><CardContent className="p-4"><Chart option={scalability} height={380} /></CardContent></Card>
           </section>
 
           {/* ============ 接口延迟矩阵 ============ */}
           <section id="latency" className="l2section l2fade mt-12 scroll-mt-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold border-l-2 border-primary pl-2.5">接口延迟矩阵</h2>
-              <div className="flex gap-1 rounded-md border p-0.5 text-xs">
-                {[false, true].map((v) => (
-                  <button key={String(v)} onClick={() => setLatVt(v)}
-                    className={cn("rounded px-3 py-1 transition-colors",
-                      latVt === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-                    VT{v ? "开" : "关"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">P50 ms · 每格 A | B | B 相对 A（绿=B 更快，红=B 更慢）</p>
+            <h2 className="text-base font-semibold border-l-2 border-primary pl-2.5">接口延迟矩阵</h2>
+            <p className="mt-1 text-xs text-muted-foreground">P50 ms · 每 rung 三列：A 原生 | B·VT关 | B·VT开（A 的 detail/bulk 100% 错误为原生缺陷，基线保持原样）</p>
             <Card className="mt-4 overflow-x-auto">
               <CardContent className="p-4">
                 <Table>
@@ -303,17 +276,15 @@ export default function L2Page() {
                     <TableRow>
                       <TableHead>接口</TableHead>
                       {RUNGS.map((t) => (
-                        <TableHead key={t} colSpan={3} className="text-center">
-                          并发 {t}
-                        </TableHead>
+                        <TableHead key={t} colSpan={3} className="text-center">并发 {t}</TableHead>
                       ))}
                     </TableRow>
                     <TableRow>
                       {RUNGS.map((t) => (
                         <Fragment key={t}>
                           <TableHead className="text-right">A</TableHead>
-                          <TableHead className="text-right">B</TableHead>
-                          <TableHead className="text-right">Δ</TableHead>
+                          <TableHead className="text-right">B·关</TableHead>
+                          <TableHead className="text-right">B·开</TableHead>
                         </Fragment>
                       ))}
                     </TableRow>
@@ -323,17 +294,16 @@ export default function L2Page() {
                       <TableRow key={ep}>
                         <TableCell className="whitespace-nowrap">{ep}</TableCell>
                         {RUNGS.map((t) => {
-                          const a = cells[key("abA", latVt, t)]?.eps?.[ep]?.p50;
-                          const b = cells[key("abB", latVt, t)]?.eps?.[ep]?.p50;
-                          const d = a && b ? Math.round((b / a - 1) * 100) : null;
+                          const a = cells[key("abA", "false", t)]?.eps?.[ep];
+                          const bf = cells[key("abB", "false", t)]?.eps?.[ep];
+                          const bn = cells[key("abB", "true", t)]?.eps?.[ep];
+                          const shade = (v?: number) =>
+                            a?.p50 && v ? (v <= a.p50 * 0.95 ? "text-green-700" : v >= a.p50 * 1.05 ? "text-red-700" : "text-muted-foreground") : "";
                           return (
                             <Fragment key={ep + t}>
-                              <TableCell className="l2num text-right">{a ?? "—"}</TableCell>
-                              <TableCell className="l2num text-right">{b ?? "—"}</TableCell>
-                              <TableCell className={cn("l2num text-right font-semibold",
-                                d === null ? "" : d <= -5 ? "text-green-700" : d >= 5 ? "text-red-700" : "text-muted-foreground")}>
-                                {d === null ? "—" : `${d > 0 ? "+" : ""}${d}%`}
-                              </TableCell>
+                              <TableCell className={cn("l2num text-right", a && a.errPct >= 100 && "text-red-700 line-through")}>{a?.p50 ?? "—"}</TableCell>
+                              <TableCell className={cn("l2num text-right", shade(bf?.p50))}>{bf?.p50 ?? "—"}</TableCell>
+                              <TableCell className={cn("l2num text-right font-semibold", shade(bn?.p50))}>{bn?.p50 ?? "—"}</TableCell>
                             </Fragment>
                           );
                         })}
@@ -345,11 +315,58 @@ export default function L2Page() {
             </Card>
           </section>
 
-          {/* ============ 虚拟线程效应 ============ */}
+          {/* ============ VT 增量归因 ============ */}
           <section id="vt" className="l2section l2fade mt-12 scroll-mt-6">
-            <h2 className="text-base font-semibold border-l-2 border-primary pl-2.5">虚拟线程效应</h2>
-            <p className="mt-1 text-xs text-muted-foreground">同变体同并发下，VT 开启后 P50 的变化%（正值=恶化）；历史结论：VT 曾实测负优化，本轮为复验</p>
+            <h2 className="text-base font-semibold border-l-2 border-primary pl-2.5">VT 增量归因（仅 B）</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              虚拟线程 = JDK 21+ 能力，A 的 JDK 17 结构上不具备（其历史 VT 相位为重复性对照，±4% 噪声标尺）。本节为 B 内部：VT 开 vs 关 的 P50 变化%（负值=VT 更快）
+            </p>
             <Card className="mt-4"><CardContent className="p-4"><Chart option={vtDelta} height={380} /></CardContent></Card>
+          </section>
+
+          {/* ============ 写路径 ============ */}
+          <section id="write" className="l2section l2fade mt-12 scroll-mt-6">
+            <h2 className="text-base font-semibold border-l-2 border-primary pl-2.5">写路径（购物车读 / 收藏写）</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              收藏：productId 全域自增（10 万商品池零重复，每发均为去重查询+插入的真实写）· 相位间 Mongo 复位 · 当前数据：{Object.keys(wcells).length ? "B 优化栈" : "暂无"}
+            </p>
+            <Card className="mt-4 overflow-x-auto">
+              <CardContent className="p-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>相位</TableHead>
+                      <TableHead className="text-right">TPS</TableHead>
+                      <TableHead className="text-right">P50 ms</TableHead>
+                      <TableHead className="text-right">P99 ms</TableHead>
+                      <TableHead className="text-right">成功%</TableHead>
+                      <TableHead className="text-right">超时</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.keys(wcells).sort().map((k) => {
+                      const [kind, vt, t] = k.split("|");
+                      const w = wcells[k];
+                      return (
+                        <TableRow key={k}>
+                          <TableCell className="whitespace-nowrap">
+                            {kind === "cart" ? "购物车读" : "收藏写"} · {vt === "true" ? "VT开" : "VT关"} · <span className="l2num">{t}</span>
+                          </TableCell>
+                          <TableCell className="l2num text-right">{num(w.tps, 1)}</TableCell>
+                          <TableCell className="l2num text-right">{num(w.p50, 0)}</TableCell>
+                          <TableCell className="l2num text-right">{num(w.p99, 0)}</TableCell>
+                          <TableCell className={cn("l2num text-right", w.okPct >= 99 ? "text-green-700" : "text-red-700")}>{num(w.okPct, 1)}%</TableCell>
+                          <TableCell className="l2num text-right">{w.timeouts}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {!Object.keys(wcells).length && (
+                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">暂无写路径数据</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </section>
 
           {/* ============ 资源消耗 ============ */}
@@ -366,7 +383,7 @@ export default function L2Page() {
                 ))}
               </div>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">每相位 5s 粒度采样（res_*.csv）· 点击图例开关节点 · 看峰值不看均值</p>
+            <p className="mt-1 text-xs text-muted-foreground">每相位 5s 粒度采样（res_*.csv）· 看峰值不看均值 · A 相位标签为 A·并发</p>
             <Card className="mt-4"><CardContent className="p-4"><Chart option={resSeries} height={420} /></CardContent></Card>
             <Card className="mt-4 overflow-x-auto">
               <CardContent className="p-4">
@@ -377,14 +394,14 @@ export default function L2Page() {
                       {["mall-mysql", "mall-svc-portal", "mall-gateway", "jmeter"].map((c) => (
                         <TableHead key={c} colSpan={2} className="text-center">{c.replace("mall-svc-", "").replace("mall-", "")}</TableHead>
                       ))}
-                      <TableHead className="text-right">portal 内存峰值</TableHead>
+                      <TableHead className="text-right">portal 内存峰值 MiB</TableHead>
                     </TableRow>
                     <TableRow>
                       {["mall-mysql", "mall-svc-portal", "mall-gateway", "jmeter"].flatMap((c) => (
                         [<TableHead key={c + "a"} className="text-right">均值</TableHead>,
                          <TableHead key={c + "b"} className="text-right">峰值</TableHead>]
                       ))}
-                      <TableHead className="text-right">MiB</TableHead>
+                      <TableHead className="text-right">—</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -421,7 +438,7 @@ export default function L2Page() {
           {/* ============ 错误与超时 ============ */}
           <section id="errors" className="l2section l2fade mt-12 scroll-mt-6">
             <h2 className="text-base font-semibold border-l-2 border-primary pl-2.5">错误与超时</h2>
-            <p className="mt-1 text-xs text-muted-foreground">错误% = 非 200 响应占比（含 45s 超时）· 超时单列</p>
+            <p className="mt-1 text-xs text-muted-foreground">A 的 detail/bulk 100% 错误 = 原生 null 属性分类缺陷（基线保持原样）· B 全线 0% 为优化栈修复效果</p>
             <Card className="mt-4 overflow-x-auto">
               <CardContent className="p-4">
                 <Table>
@@ -469,10 +486,11 @@ export default function L2Page() {
             <h2 className="text-base font-semibold border-l-2 border-primary pl-2.5">数据说明</h2>
             <Card className="mt-4">
               <CardContent className="space-y-2 p-5 text-xs leading-relaxed text-muted-foreground">
-                <p>· 数据源：benchmark/jtl/l2_*.jtl（JMeter 结果）+ res_*.csv（5s 粒度全容器 CPU/内存采样），由 l2_emit.py 聚合。</p>
-                <p>· 装置修正（本轮已生效）：bulk_detail 换有效 id 100044；search 换真实关键词+pageNum=1；MySQL 配额 1c→2c；Druid 池 20→50；master search 默认页 pageNum 0→1。</p>
-                <p>· 已知事实：abA 详情页对无属性分类商品确定性 500（原生 Example 不容忍 null，属原版缺陷，基线分支保持原样）。</p>
-                <p>· 噪声声明：共享开发机，单相位读吞吐波动可达 2~3 倍；结论看配对相位差值与峰值资源，不抠单点数字。</p>
+                <p>· 协议：A/B 对比为「整套方案」——A = 原作者代码 + JDK 17 + SB 3.5.14（无 VT 能力）；B = 优化代码 + JDK 25 + SB 4.0.8 + 索引 + VT。A 不设 VT 变量（JDK 17 无 Loom，历史上 A 的 VT 开相位仅为重复性对照，±4% 噪声标尺）。</p>
+                <p>· 数据源：l2_*.jtl + res_*.csv（5s 粒度全容器采样）+ vt_cart_/vt_coll_*.jtl（写路径），由 l2_emit.py 聚合，阶梯完成自动刷新。</p>
+                <p>· 装置修正记录：bulk_detail 换有效 id；search 换真实关键词+pageNum=1；MySQL 1c→2c；Druid 20→50；portal 内存 768m；pms_sku_stock 加 product_id 索引（4016ms→5ms）；collection_add productId 全域自增 + 相位间 Mongo 复位；master search 默认页 pageNum 0→1。</p>
+                <p>· 已发现原生缺陷：detail/bulk 对 null 属性分类 100% 崩溃（Example 不容忍 null）；收藏服务检查-插入竞态（并发下产生重复文档致 findOne 崩溃，Mongo 无唯一索引）。</p>
+                <p>· 噪声声明：共享开发机，结论看配对相位差值与峰值资源；jmeter 对已有 -l 文件会追加（rm 已修宿主路径），数据清洗按最大时间间隙切段。</p>
                 <p>· 相位数据时间：{Object.keys(cells).sort().map((k) => cells[k].mtime ? `${k.replace(/\|/g, "·")}(${cells[k].mtime})` : null).filter(Boolean).join("， ")}</p>
               </CardContent>
             </Card>
@@ -480,7 +498,6 @@ export default function L2Page() {
         </div>
       </main>
 
-      {/* ---------- 回到顶部悬浮 ---------- */}
       {showTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}

@@ -292,7 +292,12 @@ export default function Page() {
   return (
     <div className="wrap">
       <h1>mall-swarm 压测报告看板</h1>
-      <p className="meta">Next.js + ECharts · 数据源 /data/suite_*/suite.json · 共 {suites.length} 份套件 · A=前(基线) B=后(改后)，同主题 A 图在上 B 图在下，共享 Y 轴 · <a href="/l2" className="underline decoration-dotted underline-offset-4">L2 全组合阶梯报告 →</a></p>
+      <p className="meta">Next.js + ECharts · 数据源 /data/suite_*/suite.json · 共 {suites.length} 份套件 · A=前(基线) B=后(改后)，同主题 A 图在上 B 图在下，共享 Y 轴</p>
+      <div style={{ margin: "14px 0" }}>
+        <a href="/l2" className="inline-block rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 transition-colors hover:border-neutral-900">
+          L2 全组合阶梯报告（12 相位 · 含写路径与资源时序）→
+        </a>
+      </div>
 
       <div style={{ display: "flex", gap: 16, margin: "16px 0" }}>
         <label>A（前）：<select value={aKey} onChange={(e) => setAKey(e.target.value)}>
