@@ -21,7 +21,7 @@ function Chart({ option, height = 320 }: { option: any; height?: number }) {
 }
 
 const RUNGS = [500, 1000];
-const SECTIONS = [["summary", "总体TPS"], ["throughput", "吞吐"], ["sql", "SQL 层"], ["resource", "资源消耗"]];
+const SECTIONS = [["summary", "总体TPS"], ["throughput", "吞吐"], ["resource", "资源消耗"]];
 const ANIM = { animationDuration: 600, animationEasing: "cubicOut" as const };
 const key = (ep: string, v: string, t: number) => `${ep}|${v}|${t}`;
 const short = (ep: string) => ep.replace(/^(admin|portal)_/, "");
@@ -352,36 +352,6 @@ export default function ReportPage() {
                   <h3 className="mt-4 text-sm font-semibold text-muted-foreground">并发 {t} · P50（成功样本口径）</h3>
                   <div className="mt-2 rounded-xl border bg-card p-3"><Chart option={rungBars(t, "p50")} height={300} /></div>
                 </Fragment>
-              ))}
-            </section>
-
-            {/* ============ SQL 层 ============ */}
-            <section id="sql" className="l2section l2fade mt-14 scroll-mt-24">
-              <h2 className="ink-title text-lg font-bold tracking-widest">SQL 层 · digest 差分</h2>
-              <p className="mt-2 text-xs text-muted-foreground">performance_schema 按变体差分（变体起点 TRUNCATE 后累计）· 按总耗时排序 · 逻辑相同的 SQL 在 A/B 中文本不同（Example vs MP）故分列对照</p>
-              {[["A 原生基线", "abA"], ["B 优化栈", "abB"]].map(([label, v]) => (
-                <div key={v} className="mt-5">
-                  <h3 className="text-sm font-semibold text-muted-foreground">{label} · Top SQL（该变体阶梯期间累计）</h3>
-                  <div className="mt-2 overflow-x-auto rounded-xl border bg-card p-2">
-                    <table className="dtable">
-                      <thead>
-                        <tr><th>SQL</th><th className="text-right">次数</th><th className="text-right">总耗时 s</th><th className="text-right">均耗 ms</th><th className="text-right">扫描行数</th></tr>
-                      </thead>
-                      <tbody>
-                        {(data.sql?.[v] || []).map((s: any, i: number) => (
-                          <tr key={i}>
-                            <td className="whitespace-normal break-all text-left font-mono text-[11px]">{s.sql}</td>
-                            <td className="l2num text-right">{s.count}</td>
-                            <td className="l2num text-right">{num(s.totalS, 1)}</td>
-                            <td className="l2num text-right">{num(s.avgMs, 2)}</td>
-                            <td className="l2num text-right">{s.examined}</td>
-                          </tr>
-                        ))}
-                        {!(data.sql?.[v] || []).length && <tr><td colSpan={5} className="text-center text-muted-foreground">无快照数据</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               ))}
             </section>
 
