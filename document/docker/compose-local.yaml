@@ -131,7 +131,7 @@ services:
       resources:
         limits:
           cpus: "1"
-          memory: 512m
+          memory: 768m
 
   mall-auth:
     build:
