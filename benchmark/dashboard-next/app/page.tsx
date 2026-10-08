@@ -406,14 +406,7 @@ const CONTAINERS: [string, string, string][] = [
   ["gateway", "Gateway", "mall-svc-gateway"],
   ["portal", "Portal", "mall-svc-portal"],
   ["admin", "Admin", "mall-svc-admin"],
-  ["auth", "Auth", "mall-svc-auth"],
   ["jmeter", "JMeter", "docker-jmeter-run"],
-  ["nacos", "Nacos", "mall-nacos"],
-  ["rabbitmq", "RabbitMQ", "mall-rabbitmq"],
-  ["dashboard", "Dashboard", "mall-dashboard"],
-  ["prometheus", "Prometheus", "mall-prometheus"],
-  ["cadvisor", "cAdvisor", "mall-cadvisor"],
-  ["node-exporter", "NodeExp", "mall-node-exporter"],
 ];
 const CONTAINER_LABEL: any = Object.fromEntries(CONTAINERS.map(([k, l]) => [k, l]));
 
