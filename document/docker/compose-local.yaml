@@ -23,7 +23,7 @@ services:
       resources:
         limits:
           cpus: "2"
-          memory: 1g
+          memory: 512m
 
   redis:
     image: redis:7
@@ -87,11 +87,6 @@ services:
     depends_on:
       - nacos
       - redis
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 512m
 
   mall-admin:
     build:
@@ -103,6 +98,7 @@ services:
     environment:
       <<: *java-env
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/mall?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
+      SPRING_THREADS_VIRTUAL_ENABLED: "${VT_ENABLED:-false}"
     depends_on:
       - mysql
       - redis
@@ -124,6 +120,8 @@ services:
       <<: *java-env
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/mall?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
       SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_MONGODB_HOST: mongo
+      SPRING_THREADS_VIRTUAL_ENABLED: "${VT_ENABLED:-false}"
     depends_on:
       - mysql
       - redis
@@ -132,8 +130,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "2"
-          memory: 1g
+          cpus: "1"
+          memory: 512m
 
   mall-auth:
     build:
@@ -153,6 +151,18 @@ services:
         limits:
           cpus: "0.5"
           memory: 384m
+
+  mongo:
+    image: mongo:7
+    container_name: mall-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
 
   prometheus:
     image: prom/prometheus:latest
@@ -206,10 +216,10 @@ services:
     image: eclipse-temurin:17-jre
     container_name: mall-jmeter
     profiles: ["test"]
-    entrypoint: ["/opt/jmeter/bin/jmeter"]
-    working_dir: /jtl
     environment:
       HEAP: -Xms256m -Xmx700m
+    entrypoint: ["/opt/jmeter/bin/jmeter"]
+    working_dir: /jtl
     volumes:
       - ${HOME}/tools/apache-jmeter-5.6.3:/opt/jmeter:ro
       - ../../benchmark/jmx:/jmx:ro
