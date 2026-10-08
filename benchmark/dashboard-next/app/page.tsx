@@ -396,31 +396,7 @@ export default function ReportPage() {
                 </div>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">5s 粒度全容器采样 · 占时分布: x=利用率/内存档位, y=该档位累计时长（秒）· 图例可开关 · A·500=虚线浅灰, A·1000=实线深灰, B·500=虚线浅蓝, B·1000=实线蓝</p>
-              <div className="mt-4 overflow-x-auto rounded-xl border bg-card p-2">
-                <table className="dtable">
-                  <thead>
-                    <tr><th>相位</th><th className="text-right">Portal CPU 均/峰 %</th><th className="text-right">Portal 内存峰 MiB</th><th className="text-right">MySQL CPU 均/峰 %</th></tr>
-                  </thead>
-                  <tbody>
-                    {Object.keys(cells).sort((a, b) => {
-                      const [ea, va, ta] = a.split("|"), [eb, vb, tb] = b.split("|");
-                      return +ta - +tb || ea.localeCompare(eb);
-                    }).map((k) => {
-                      const [ep, v, t] = k.split("|");
-                      const r = cells[k]?.res || {};
-                      const g = (c: string, x: string) => r[c] ? num(r[c][x] / 100, 2) : "—";
-                      return (
-                        <tr key={k}>
-                          <td className="l2num whitespace-nowrap">{ep === "abA" ? "A" : ep === "abB" ? "B" : ep} · {v === "abA" ? "A" : v === "abB" ? "B" : v} · {t}</td>
-                          <td className="l2num text-right">{g("mall-svc-portal", "cpuAvg")} / {g("mall-svc-portal", "cpuMax")}</td>
-                          <td className="l2num text-right">{r["mall-svc-portal"] ? num(r["mall-svc-portal"].memMax, 0) : "—"}</td>
-                          <td className="l2num text-right">{g("mall-mysql", "cpuAvg")} / {g("mall-mysql", "cpuMax")}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+
               <div className="mt-4 rounded-xl border bg-card p-3">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">CPU 占时分布（{CONTAINER_LABEL[resChart]}）</div>
                 <Chart option={cpuDist} height={340} />
