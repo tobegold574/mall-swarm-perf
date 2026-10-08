@@ -124,8 +124,14 @@ export default function ReportPage() {
   /* ---------- 分档接口柱状图 ---------- */
   const rungBars = (t: number, metric: "tps" | "p50") => {
     if (!data) return null;
-    const val = (c: any, ep: string) =>
-      metric === "tps" ? (c?.eps?.[ep]?.okTps ?? null) : (c?.eps?.[ep]?.okP50 ?? null);
+    const val = (c: any, ep: string) => {
+      if (metric === "tps") return c?.eps?.[ep]?.okTps ?? null;
+      const e = c?.eps?.[ep];
+      if (!e) return null;
+      // 成功样本占比 <1% 时延迟无统计意义, 不展示(动态规则, A/B 同样适用)
+      if (e.n > 0 && (e.n - Math.round(e.errPct / 100 * e.n)) < e.n * 0.01) return null;
+      return e.okP50 ?? null;
+    };
     return {
       ...ANIM,
       tooltip: { trigger: "axis", valueFormatter: (v: number) => (metric === "tps" ? `${v} TPS` : `${v} ms`) },
