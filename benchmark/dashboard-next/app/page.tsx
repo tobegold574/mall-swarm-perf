@@ -159,37 +159,7 @@ export default function ReportPage() {
   }, [data, dark]);
 
   /* ---------- 资源时序(CPU/内存) ---------- */
-  const CONTAINER_MAP: any = { mysql: "mall-mysql", redis: "mall-redis", mongo: "mall-mongo", gateway: "mall-svc-gateway", portal: "mall-svc-portal", admin: "mall-svc-admin", jmeter: null };
-  const seriesFor = (kind: "cpu" | "mem") => {
-    const entry = CONTAINERS.find(([k]) => k === resChart);
-    const match = (c: string) => c === (entry?.[2] || "") || (entry?.[2] || "").startsWith !== undefined && c.startsWith(entry?.[2] || "");
-    const phases = Object.keys(cells).sort((a, b) => {
-      const [ea, va, ta] = a.split("|"), [eb, vb, tb] = b.split("|");
-      return +ta - +tb || ea.localeCompare(eb);
-    });
-    const grays = dark ? ["#f5f5f5", "#a3a3a3", "#737373", "#525252", "#d4d4d4", "#8f8f8f", "#404040", "#e5e5e5"]
-                       : ["#111827", "#6b7280", "#9ca3af", "#374151", "#d1d5db", "#4b5563", "#00000080", "#37415180"];
-    let ci = 0;
-    return {
-      ...ANIM,
-      tooltip: { trigger: "axis", valueFormatter: (v: number) => (kind === "cpu" ? `${v}%` : `${v} MiB`) },
-      legend: { type: "scroll", top: 0, textStyle: { color: pal.txt } },
-      grid: { left: 60, right: 20, top: 40, bottom: 40 },
-      xAxis: { type: "value", name: "相位开始后秒数", max: 60, ...axis },
-      yAxis: { type: "value", name: kind === "cpu" ? "CPU %" : "内存 MiB", ...axis },
-      series: phases.flatMap((k) => {
-        const ss = cells[k]?.resSeries;
-        if (!ss || !entry) return [];
-        const pts = ss.filter((p: any) => match(p.container)).map((p: any) => [p.dt, kind === "cpu" ? p.cpu : p.mem]);
-        if (!pts.length) return [];
-        const [ep, v, t] = k.split("|");
-        const color = grays[ci++ % grays.length];
-        return [{ name: `${short(ep)}·${v === "abA" ? "A" : "B"}·${t}`, type: "line", symbol: "none", smooth: true, lineStyle: { width: 1.5, color }, itemStyle: { color }, data: pts }];
-      }),
-    };
-  };
-  const cpuSeries = useMemo(() => seriesFor("cpu"), [data, resChart, dark]);
-  const memSeries = useMemo(() => seriesFor("mem"), [data, resChart, dark]);
+    const memSeries = useMemo(() => seriesFor("mem"), [data, resChart, dark]);
 
   /* ---------- CPU 占时分布: x=利用率, y=累计时长, A/B 双线 ---------- */
   const cpuDist = useMemo(() => {
@@ -229,6 +199,42 @@ export default function ReportPage() {
       xAxis: { type: "category", data: labels, name: "CPU 利用率 %", ...axis, axisLabel: { ...axis.axisLabel, rotate: 30 } },
       yAxis: { type: "value", name: "累计时长 秒", ...axis },
       series: [mk(`${CONTAINER_LABEL[resChart]}/A`, "abA", pal.a), mk(`${CONTAINER_LABEL[resChart]}/B`, "abB", pal.b)],
+    };
+  }, [data, dark, resChart]);
+  /* ---------- 内存占时分布: x=内存档位, y=累计时长, A/B 双线 ---------- */
+  const memDist = useMemo(() => {
+    if (!data) return null;
+    const entry = CONTAINERS.find(([k]) => k === resChart);
+    if (!entry) return null;
+    const samples: Record<string, number[]> = { abA: [], abB: [] };
+    for (const k of Object.keys(cells)) {
+      const v = k.split("|")[1];
+      const ss = cells[k]?.resSeries;
+      if (!ss) continue;
+      for (const p of ss) {
+        if (p.container === entry[2] && p.mem > 0) samples[v].push(p.mem);
+      }
+    }
+    const maxMem = Math.max(1, ...samples.abA, ...samples.abB);
+    const step = Math.max(50, Math.ceil(maxMem / 10 / 50) * 50);
+    const nb = Math.ceil(maxMem / step) + 1;
+    const labels = Array.from({ length: nb }, (_, i) => `${i * step}`);
+    const mk = (name: string, v: string, color: string) => ({
+      name, type: "line" as const, symbol: "circle", symbolSize: 6,
+      lineStyle: { width: 2.4 }, itemStyle: { color },
+      data: labels.map((_, i) => {
+        const lo = i * step, hi = lo + step;
+        return Math.round(samples[v].filter((m) => m >= lo && m < hi).length * 5 * 10) / 10;
+      }),
+    });
+    return {
+      ...ANIM,
+      tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v} 秒` },
+      legend: { top: 0, textStyle: { color: pal.txt } },
+      grid: { left: 60, right: 20, top: 40, bottom: 56 },
+      xAxis: { type: "category", data: labels, name: "内存档位 MiB", ...axis, axisLabel: { ...axis.axisLabel, rotate: 30 } },
+      yAxis: { type: "value", name: "累计时长 秒", ...axis },
+      series: [mk(`${entry[1]}/A`, "abA", pal.a), mk(`${entry[1]}/B`, "abB", pal.b)],
     };
   }, [data, dark, resChart]);
 
@@ -410,10 +416,6 @@ export default function ReportPage() {
               <div className="mt-4 rounded-xl border bg-card p-3">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">CPU 占时分布（{CONTAINER_LABEL[resChart]}）</div>
                 <Chart option={cpuDist} height={340} />
-              </div>
-              <div className="mt-4 rounded-xl border bg-card p-3">
-                <div className="mb-1 text-xs font-medium text-muted-foreground">CPU 时序（%）</div>
-                <Chart option={cpuSeries} height={320} />
               </div>
               <div className="mt-4 rounded-xl border bg-card p-3">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">内存占时分布（x=内存档位 MiB, y=累计时长秒）</div>
