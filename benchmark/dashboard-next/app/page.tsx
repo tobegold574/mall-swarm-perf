@@ -125,7 +125,7 @@ export default function ReportPage() {
   const rungBars = (t: number, metric: "tps" | "p50") => {
     if (!data) return null;
     const val = (c: any, ep: string) =>
-      metric === "tps" ? (c?.eps?.[ep]?.okTps ?? c?.eps?.[ep]?.tps ?? null) : (c?.eps?.[ep]?.okP50 ?? c?.eps?.[ep]?.p50 ?? null);
+      metric === "tps" ? (c?.eps?.[ep]?.okTps ?? null) : (c?.eps?.[ep]?.okP50 ?? null);
     return {
       ...ANIM,
       tooltip: { trigger: "axis", valueFormatter: (v: number) => (metric === "tps" ? `${v} TPS` : `${v} ms`) },
@@ -190,43 +190,43 @@ export default function ReportPage() {
   const cpuSeries = useMemo(() => seriesFor("cpu"), [data, resChart, dark]);
   const memSeries = useMemo(() => seriesFor("mem"), [data, resChart, dark]);
 
-  /* ---------- CPU 占时分布(x=利用率档位, y=占时秒) ---------- */
+  /* ---------- CPU 占时分布: x=利用率, y=累计时长, A/B 双线 ---------- */
   const cpuDist = useMemo(() => {
     if (!data) return null;
-    const bounds = [0, 25, 50, 75, 100, 125, 150, 175, 200, 1e9];
-    const labels = ["0-25", "25-50", "50-75", "75-100", "100-125", "125-150", "150-175", "175-200", "200+"];
-    const grays = dark ? ["#f5f5f5", "#a3a3a3", "#737373", "#525252", "#d4d4d4", "#8f8f8f", "#404040", "#e5e5e5"]
-                       : ["#111827", "#6b7280", "#9ca3af", "#374151", "#d1d5db", "#4b5563", "#00000080", "#37415180"];
-    const phases = Object.keys(cells).sort((a, b) => {
-      const [ea, va, ta] = a.split("|"), [eb, vb, tb] = b.split("|");
-      return +ta - +tb || ea.localeCompare(eb);
+    const cont = CONTAINER_MAP[resChart] || "mall-mysql";
+    const labels = [];
+    for (let lo = 0; lo < 220; lo += 10) labels.push(`${lo}-${lo + 10}`);
+    labels.push("220+");
+    const agg = { abA: new Array(labels.length).fill(0), abB: new Array(labels.length).fill(0) };
+    const counts = { abA: 0, abB: 0 };
+    for (const k of Object.keys(cells)) {
+      const v = k.split("|")[1];
+      const ss = cells[k]?.resSeries;
+      if (!ss) continue;
+      for (const p of ss) {
+        if (p.container !== cont) continue;
+        let bi = labels.length - 1;
+        for (let i = 0; i < labels.length; i++) {
+          const lo = i * 10;
+          if (p.cpu >= lo && p.cpu < lo + 10) { bi = i; break; }
+        }
+        agg[v][bi] += 5;
+        counts[v]++;
+      }
+    }
+    const mk = (name: string, v: string, color: string) => ({
+      name, type: "line" as const, symbol: "circle", symbolSize: 6,
+      lineStyle: { width: 2.4 }, itemStyle: { color },
+      data: labels.map((_, i) => Math.round(agg[v][i] * 10) / 10),
     });
-    let ci = 0;
     return {
       ...ANIM,
       tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v} 秒` },
-      legend: { type: "scroll", top: 0, textStyle: { color: pal.txt } },
-      grid: { left: 52, right: 16, top: 40, bottom: 40 },
-      xAxis: { type: "category", data: labels, name: "CPU 利用率档位 %", ...axis },
-      yAxis: { type: "value", name: "占时 秒", ...axis },
-      series: phases.flatMap((k) => {
-        const ss = cells[k]?.resSeries;
-        if (!ss) return [];
-        const cont = resChart === "mysql" ? "mall-mysql" : CONTAINER_MAP[resChart];
-        const samples = ss.filter((p: any) => p.container === cont).map((p: any) => p.cpu);
-        if (!samples.length) return [];
-        const buckets = new Array(labels.length).fill(0);
-        for (const cpu of samples) {
-          let bi = labels.length - 1;
-          for (let i = 0; i < bounds.length - 1; i++) {
-            if (cpu >= bounds[i] && cpu < bounds[i + 1]) { bi = i; break; }
-          }
-          buckets[bi] += 5;
-        }
-        const [ep, v, t] = k.split("|");
-        const color = grays[ci++ % grays.length];
-        return [{ name: `${short(ep)}·${v === "abA" ? "A" : "B"}·${t}`, type: "bar", stack: "t", barMaxWidth: 26, itemStyle: { color }, data: buckets }];
-      }),
+      legend: { top: 0, textStyle: { color: pal.txt } },
+      grid: { left: 56, right: 24, top: 44, bottom: 56 },
+      xAxis: { type: "category", data: labels, name: "CPU 利用率 %", ...axis, axisLabel: { ...axis.axisLabel, rotate: 30 } },
+      yAxis: { type: "value", name: "累计时长 秒", ...axis },
+      series: [mk(`${CONTAINER_LABEL[resChart]}/A`, pal.a, "abA"), mk(`${CONTAINER_LABEL[resChart]}/B`, pal.b, "abB")],
     };
   }, [data, dark, resChart]);
 
