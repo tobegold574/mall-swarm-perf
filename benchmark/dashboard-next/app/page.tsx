@@ -161,7 +161,8 @@ export default function ReportPage() {
   /* ---------- 资源时序(CPU/内存) ---------- */
   const CONTAINER_MAP: any = { mysql: "mall-mysql", redis: "mall-redis", mongo: "mall-mongo", gateway: "mall-svc-gateway", portal: "mall-svc-portal", admin: "mall-svc-admin", jmeter: null };
   const seriesFor = (kind: "cpu" | "mem") => {
-    const cont = CONTAINER_MAP[resChart];
+    const entry = CONTAINERS.find(([k]) => k === resChart);
+    const match = (c: string) => c === (entry?.[2] || "") || (entry?.[2] || "").startsWith !== undefined && c.startsWith(entry?.[2] || "");
     const phases = Object.keys(cells).sort((a, b) => {
       const [ea, va, ta] = a.split("|"), [eb, vb, tb] = b.split("|");
       return +ta - +tb || ea.localeCompare(eb);
@@ -178,8 +179,8 @@ export default function ReportPage() {
       yAxis: { type: "value", name: kind === "cpu" ? "CPU %" : "内存 MiB", ...axis },
       series: phases.flatMap((k) => {
         const ss = cells[k]?.resSeries;
-        if (!ss || !cont) return [];
-        const pts = ss.filter((p: any) => p.container === cont).map((p: any) => [p.dt, kind === "cpu" ? p.cpu : p.mem]);
+        if (!ss || !entry) return [];
+        const pts = ss.filter((p: any) => match(p.container)).map((p: any) => [p.dt, kind === "cpu" ? p.cpu : p.mem]);
         if (!pts.length) return [];
         const [ep, v, t] = k.split("|");
         const color = grays[ci++ % grays.length];
@@ -193,7 +194,8 @@ export default function ReportPage() {
   /* ---------- CPU 占时分布: x=利用率, y=累计时长, A/B 双线 ---------- */
   const cpuDist = useMemo(() => {
     if (!data) return null;
-    const cont = CONTAINER_MAP[resChart] || "mall-mysql";
+    const entry = CONTAINERS.find(([k]) => k === resChart);
+    const match = (c: string) => c === (entry?.[2] || "") || (!!entry && entry[2] !== "docker-jmeter-run" && false) || c.startsWith(entry?.[2] || "");
     const labels = [];
     for (let lo = 0; lo < 220; lo += 10) labels.push(`${lo}-${lo + 10}`);
     labels.push("220+");
@@ -204,7 +206,7 @@ export default function ReportPage() {
       const ss = cells[k]?.resSeries;
       if (!ss) continue;
       for (const p of ss) {
-        if (p.container !== cont) continue;
+        if (!match(p.container)) continue;
         let bi = labels.length - 1;
         for (let i = 0; i < labels.length; i++) {
           const lo = i * 10;
@@ -361,8 +363,8 @@ export default function ReportPage() {
             <section id="resource" className="l2section l2fade mt-14 mb-20 scroll-mt-24">
               <div className="flex items-center justify-between">
                 <h2 className="ink-title text-lg font-bold tracking-widest">资源消耗</h2>
-                <div className="seg">
-                  {[["mysql", "MySQL"], ["redis", "Redis"], ["mongo", "Mongo"], ["gateway", "Gateway"], ["portal", "Portal"], ["admin", "Admin"], ["jmeter", "JMeter"]].map(([k, label]) => (
+                <div className="seg flex-wrap">
+                  {CONTAINERS.map(([k, label]) => (
                     <button key={k} className={cn(resChart === k && "on")} onClick={() => setResChart(k as any)}>{label}</button>
                   ))}
                 </div>
@@ -395,7 +397,24 @@ export default function ReportPage() {
   );
 }
 
-const CONTAINER_LABEL: any = { mysql: "MySQL", redis: "Redis", mongo: "Mongo", gateway: "Gateway", portal: "Portal", admin: "Admin", jmeter: "JMeter" };
+/* 全部 14 个容器: [key, 展示名, 容器名或前缀] */
+const CONTAINERS: [string, string, string][] = [
+  ["mysql", "MySQL", "mall-mysql"],
+  ["redis", "Redis", "mall-redis"],
+  ["mongo", "Mongo", "mall-mongo"],
+  ["gateway", "Gateway", "mall-svc-gateway"],
+  ["portal", "Portal", "mall-svc-portal"],
+  ["admin", "Admin", "mall-svc-admin"],
+  ["auth", "Auth", "mall-svc-auth"],
+  ["jmeter", "JMeter", "docker-jmeter-run"],
+  ["nacos", "Nacos", "mall-nacos"],
+  ["rabbitmq", "RabbitMQ", "mall-rabbitmq"],
+  ["dashboard", "Dashboard", "mall-dashboard"],
+  ["prometheus", "Prometheus", "mall-prometheus"],
+  ["cadvisor", "cAdvisor", "mall-cadvisor"],
+  ["node-exporter", "NodeExp", "mall-node-exporter"],
+];
+const CONTAINER_LABEL: any = Object.fromEntries(CONTAINERS.map(([k, l]) => [k, l]));
 
 function Badge2({ v }: { v: number }) {
   return (
