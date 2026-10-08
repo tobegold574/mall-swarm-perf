@@ -21,7 +21,7 @@ function Chart({ option, height = 320 }: { option: any; height?: number }) {
 }
 
 const RUNGS = [100, 200, 500, 1000];
-const SECTIONS = [["summary", "总体TPS"], ["throughput", "吞吐"], ["write", "Mongo/Redis 读写"], ["resource", "资源峰值"]];
+const SECTIONS = [["summary", "总体TPS"], ["throughput", "吞吐"], ["sql", "SQL 层"], ["server", "服务端延迟"], ["resource", "资源峰值"]];
 const ANIM = { animationDuration: 600, animationEasing: "cubicOut" as const };
 const key = (img: string, vt: string, t: number) => `${img}|${vt}|${t}`;
 const short = (ep: string) => ep.replace(/^(admin|portal)_/, "");
@@ -119,11 +119,11 @@ export default function ReportPage() {
     };
   }, [data, dark]);
 
-  /* ---------- 分档接口柱状图工厂 ---------- */
+  /* ---------- 分档接口柱状图工厂(延迟=成功样本口径) ---------- */
   const rungBars = (metric: "tps" | "p50", t: number) => {
     if (!data) return null;
     const val = (c: any, ep: string) =>
-      metric === "tps" ? (c?.eps?.[ep]?.okTps ?? c?.eps?.[ep]?.tps ?? null) : (c?.eps?.[ep]?.p50 ?? null);
+      metric === "tps" ? (c?.eps?.[ep]?.okTps ?? c?.eps?.[ep]?.tps ?? null) : (c?.eps?.[ep]?.okP50 ?? c?.eps?.[ep]?.p50 ?? null);
     return {
       ...ANIM,
       tooltip: { trigger: "axis", valueFormatter: (v: number) => (metric === "tps" ? `${v} TPS` : `${v} ms`) },
@@ -158,7 +158,7 @@ export default function ReportPage() {
   /* ---------- 资源时序 ---------- */
   const resSeries = useMemo(() => {
     if (!data) return null;
-    const cont = resChart === "mysql" ? "mall-mysql" : "mall-svc-portal";
+    const cont = resChart === "mysql" ? "mall-mysql" : resChart === "redis" ? "mall-redis" : resChart === "mongo" ? "mall-mongo" : resChart === "gateway" ? "mall-svc-gateway" : resChart === "portal" ? "mall-svc-portal" : resChart === "admin" ? "mall-svc-admin" : "mall-mysql";
     const phases = Object.keys(cells).sort((a, b) => {
       const [ia, , ta] = a.split("|"), [ib, , tb] = b.split("|");
       return +ta - +tb || ia.localeCompare(ib);
@@ -308,46 +308,64 @@ export default function ReportPage() {
               </div>
             </section>
 
-            {/* ============ 写路径 ============ */}
-            <section id="write" className="l2section l2fade mt-14 scroll-mt-24">
-              <h2 className="ink-title text-lg font-bold tracking-widest">Mongo / Redis 读写</h2>
-              <p className="mt-2 text-xs text-muted-foreground">收藏写 = MongoDB（去重查询+插入）· 购物车读 = Redis + MySQL · 每档一张，以接口为横轴</p>
-              <div className="mt-4 grid grid-cols-3 gap-4">
-                {RUNGS.slice(1).map((t) => (
-                  <div key={t} className="rounded-xl border bg-card p-3">
-                    <div className="mb-1 text-xs font-medium text-muted-foreground">并发 {t}</div>
-                    <Chart option={{
-                      ...ANIM,
-                      tooltip: { trigger: "axis" },
-                      legend: { top: 0, textStyle: { color: pal.txt } },
-                      grid: { left: 46, right: 12, top: 40, bottom: 30 },
-                      xAxis: { type: "category", data: ["收藏写", "购物车读"], ...axis, axisLabel: { ...axis.axisLabel, fontSize: 10 } },
-                      yAxis: { type: "value", name: "TPS", ...axis },
-                      series: [
-                        { name: "A", type: "bar", barMaxWidth: 20, itemStyle: { color: pal.a }, data: [wc[`coll|abA|${t}`]?.okTps ?? null, wc[`cart|abA|${t}`]?.okTps ?? null] },
-                        { name: "B", type: "bar", barMaxWidth: 20, itemStyle: { color: pal.b }, data: [wc[`coll|abB|${t}`]?.okTps ?? null, wc[`cart|abB|${t}`]?.okTps ?? null] },
-                      ],
-                    }} height={240} />
+            {/* ============ SQL 层 ============ */}
+            <section id="sql" className="l2section l2fade mt-14 scroll-mt-24">
+              <h2 className="ink-title text-lg font-bold tracking-widest">SQL 层 · digest 差分</h2>
+              <p className="mt-2 text-xs text-muted-foreground">performance_schema.events_statements_summary_by_digest 三点快照差分（A 组前/A 组末/B 组末），按总耗时排序 · SQL 文本 A/B 天然不同可分开归因</p>
+              {[["A 原生基线", "A"], ["B 优化栈", "B"]].map(([label, k]) => (
+                <div key={k} className="mt-5">
+                  <h3 className="text-sm font-semibold text-muted-foreground">{label} · Top SQL（阶梯期间累计）</h3>
+                  <div className="mt-2 overflow-x-auto rounded-xl border bg-card p-2">
+                    <table className="dtable">
+                      <thead>
+                        <tr><th>SQL</th><th className="text-right">次数</th><th className="text-right">总耗时 s</th><th className="text-right">均耗 ms</th><th className="text-right">扫描行数</th></tr>
+                      </thead>
+                      <tbody>
+                        {(data.sql?.[k] || []).map((s: any, i: number) => (
+                          <tr key={i}>
+                            <td className="whitespace-normal break-all text-left font-mono text-[11px]">{s.sql}</td>
+                            <td className="l2num text-right">{s.count}</td>
+                            <td className="l2num text-right">{num(s.totalS, 1)}</td>
+                            <td className="l2num text-right">{num(s.avgMs, 2)}</td>
+                            <td className="l2num text-right">{s.examined}</td>
+                          </tr>
+                        ))}
+                        {!(data.sql?.[k] || []).length && <tr><td colSpan={5} className="text-center text-muted-foreground">无快照数据</td></tr>}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
+            </section>
+
+            {/* ============ 服务端延迟 ============ */}
+            <section id="server" className="l2section l2fade mt-14 scroll-mt-24">
+              <h2 className="text-base font-semibold">服务端延迟 · P95 (ms)</h2>
+              <p className="mt-2 text-xs text-muted-foreground">Prometheus 直方图按相位窗口取值（JMeter 客户端视角之外的另一半）· /product/list 与深分页、/product/detail 与批量同 URI 合并统计</p>
               <div className="mt-4 overflow-x-auto rounded-xl border bg-card p-2">
                 <table className="dtable">
                   <thead>
-                    <tr><th>并发</th><th className="text-right">A 收藏写</th><th className="text-right">B 收藏写</th><th className="text-right">Δ%</th><th className="text-right">A 购物车读</th><th className="text-right">B 购物车读</th><th className="text-right">Δ%</th></tr>
+                    <tr>
+                      <th>相位</th>
+                      {data.eps.map((ep: string) => <th key={ep} className="text-right">{short(ep)}</th>)}
+                    </tr>
                   </thead>
                   <tbody>
-                    {RUNGS.slice(1).map((t) => (
-                      <tr key={t}>
-                        <td className="l2num">{t}</td>
-                        <td className="l2num text-right">{num(wc[`coll|abA|${t}`]?.okTps, 1)}</td>
-                        <td className="l2num text-right">{num(wc[`coll|abB|${t}`]?.okTps, 1)}</td>
-                        <td className="text-right"><Delta v={pct(wc[`coll|abA|${t}`]?.okTps, wc[`coll|abB|${t}`]?.okTps)} /></td>
-                        <td className="l2num text-right">{num(wc[`cart|abA|${t}`]?.okTps, 1)}</td>
-                        <td className="l2num text-right">{num(wc[`cart|abB|${t}`]?.okTps, 1)}</td>
-                        <td className="text-right"><Delta v={pct(wc[`cart|abA|${t}`]?.okTps, wc[`cart|abB|${t}`]?.okTps)} /></td>
-                      </tr>
-                    ))}
+                    {Object.keys(cells).sort((a, b) => {
+                      const [ia, , ta] = a.split("|"), [ib, , tb] = b.split("|");
+                      return +ta - +tb || ia.localeCompare(ib);
+                    }).map((k) => {
+                      const [img, vt, t] = k.split("|");
+                      const sp = cells[k]?.serverP95?.portal || {};
+                      return (
+                        <tr key={k}>
+                          <td className="l2num whitespace-nowrap">{img === "abA" ? "A" : "B"} · {t}{vt === "true" ? " · VT" : ""}</td>
+                          {data.eps.map((ep: string) => (
+                            <td key={ep} className="l2num text-right">{sp[ep] != null ? num(sp[ep], 0) : "—"}</td>
+                          ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -368,7 +386,7 @@ export default function ReportPage() {
               </div>
               <div className="mt-4 flex items-center gap-3">
                 <div className="seg">
-                  {[["mysql", "MySQL"], ["portal", "Portal"]].map(([k, label]) => (
+                  {[["mysql", "MySQL"], ["redis", "Redis"], ["mongo", "Mongo"], ["gateway", "Gateway"], ["portal", "Portal"], ["admin", "Admin"], ["jmeter", "JMeter"]].map(([k, label]) => (
                     <button key={k} className={cn(resChart === k && "on")} onClick={() => setResChart(k as any)}>{label}</button>
                   ))}
                 </div>
