@@ -185,24 +185,35 @@ export default function ReportPage() {
     };
   }, [data, resChart, dark]);
 
-  /* ---------- 资源峰值柱状图 ---------- */
-  const peakBars = (metric: "cpu" | "mem") => {
-    const cont = metric === "cpu" ? "mall-mysql" : "mall-svc-portal";
-    const f = metric === "cpu" ? "cpuMax" : "memMax";
-    const fmt = (v: number | null) => v === null ? null : metric === "cpu" ? Math.round(v / 100 * 100) / 100 : Math.round(v);
+  /* ---------- 内存时序 ---------- */
+  const memSeries = useMemo(() => {
+    if (!data) return null;
+    const cont = resChart === "mysql" ? "mall-mysql" : resChart === "redis" ? "mall-redis" : resChart === "mongo" ? "mall-mongo" : resChart === "gateway" ? "mall-svc-gateway" : resChart === "portal" ? "mall-svc-portal" : resChart === "admin" ? "mall-svc-admin" : "mall-mysql";
+    const phases = Object.keys(cells).sort((a, b) => {
+      const [ia, va, ta] = a.split("|"), [ib, vb, tb] = b.split("|");
+      return +ta - +tb || ia.localeCompare(ib);
+    });
+    const grays = dark ? ["#f5f5f5", "#a3a3a3", "#737373", "#525252", "#d4d4d4", "#8f8f8f", "#404040", "#e5e5e5"]
+                       : ["#111827", "#6b7280", "#9ca3af", "#374151", "#d1d5db", "#4b5563", "#11182799", "#000000aa"];
+    let ci = 0;
     return {
       ...ANIM,
-      tooltip: { trigger: "axis", valueFormatter: (v: number) => (metric === "cpu" ? `${v} 核` : `${v} MiB`) },
-      legend: { top: 0, textStyle: { color: pal.txt } },
-      grid: { left: 56, right: 20, top: 40, bottom: 40 },
-      xAxis: { type: "category", data: RUNGS.map((t) => `并发${t}`), ...axis },
-      yAxis: { type: "value", name: metric === "cpu" ? "核" : "MiB", ...axis },
-      series: [
-        { name: "A", type: "bar", barMaxWidth: 26, itemStyle: { color: pal.a }, data: RUNGS.map((t) => fmt(cells[key("abA", "false", t)]?.res?.[cont]?.[f] ?? null)) },
-        { name: "B", type: "bar", barMaxWidth: 26, itemStyle: { color: pal.b }, data: RUNGS.map((t) => fmt(cells[key("abB", "true", t)]?.res?.[cont]?.[f] ?? null)) },
-      ],
+      tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v} MiB` },
+      legend: { type: "scroll", top: 0, textStyle: { color: pal.txt } },
+      grid: { left: 60, right: 20, top: 40, bottom: 40 },
+      xAxis: { type: "value", name: "秒", max: 60, ...axis },
+      yAxis: { type: "value", name: "内存 MiB", ...axis },
+      series: phases.flatMap((k) => {
+        const ss = cells[k]?.resSeries;
+        if (!ss) return [];
+        const pts = ss.filter((p: any) => p.container === cont).map((p: any) => [p.dt, p.mem]);
+        if (!pts.length) return [];
+        const [img, , t] = k.split("|");
+        const color = grays[ci++ % grays.length];
+        return [{ name: `${img === "abA" ? "A" : "B"}·${t}`, type: "line", symbol: "none", smooth: true, lineStyle: { width: 1.6, color }, itemStyle: { color }, data: pts }];
+      }),
     };
-  };
+  }, [data, resChart, dark]);
 
   if (err) {
     return <div className="shell items-center justify-center"><div className="text-sm text-muted-foreground">{err}</div></div>;
@@ -371,28 +382,25 @@ export default function ReportPage() {
               </div>
             </section>
 
-            {/* ============ 资源峰值 ============ */}
+            {/* ============ 资源消耗 ============ */}
             <section id="resource" className="l2section l2fade mt-14 mb-20 scroll-mt-24">
-              <h2 className="ink-title text-lg font-bold tracking-widest">资源峰值</h2>
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                <div className="rounded-xl border bg-card p-3">
-                  <div className="mb-1 text-xs font-medium text-muted-foreground">MySQL CPU 峰值（核）</div>
-                  <Chart option={peakBars("cpu")} height={280} />
-                </div>
-                <div className="rounded-xl border bg-card p-3">
-                  <div className="mb-1 text-xs font-medium text-muted-foreground">Portal 内存峰值（MiB）</div>
-                  <Chart option={peakBars("mem")} height={280} />
-                </div>
-              </div>
-              <div className="mt-4 flex items-center gap-3">
+              <div className="flex items-center justify-between">
+                <h2 className="ink-title text-lg font-bold tracking-widest">资源消耗</h2>
                 <div className="seg">
                   {[["mysql", "MySQL"], ["redis", "Redis"], ["mongo", "Mongo"], ["gateway", "Gateway"], ["portal", "Portal"], ["admin", "Admin"], ["jmeter", "JMeter"]].map(([k, label]) => (
                     <button key={k} className={cn(resChart === k && "on")} onClick={() => setResChart(k as any)}>{label}</button>
                   ))}
                 </div>
-                <span className="text-xs text-muted-foreground">CPU 时序（5s 粒度采样）</span>
               </div>
-              <div className="mt-3 rounded-xl border bg-card p-3"><Chart option={resSeries} height={400} /></div>
+              <p className="mt-2 text-xs text-muted-foreground">5s 粒度全容器采样 · 图例可开关（A·并发 / B·并发·VT）</p>
+              <div className="mt-4 rounded-xl border bg-card p-3">
+                <div className="mb-1 text-xs font-medium text-muted-foreground">CPU 时序（%）</div>
+                <Chart option={resSeries} height={380} />
+              </div>
+              <div className="mt-4 rounded-xl border bg-card p-3">
+                <div className="mb-1 text-xs font-medium text-muted-foreground">内存时序（MiB）</div>
+                <Chart option={memSeries} height={300} />
+              </div>
             </section>
           </div>
         </div>
