@@ -121,6 +121,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/mall?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_MONGODB_HOST: mongo
+      SPRING_DATA_MONGODB_HOST: mongo
       SPRING_THREADS_VIRTUAL_ENABLED: "${VT_ENABLED:-false}"
     depends_on:
       - mysql
