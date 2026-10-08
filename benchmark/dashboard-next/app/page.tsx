@@ -159,36 +159,45 @@ export default function ReportPage() {
   }, [data, dark]);
 
 
-  /* ---------- CPU 占时分布: x=利用率, y=累计时长, A/B 双线 ---------- */
+  /* ---------- CPU 占时分布: x=利用率, y=累计时长, 按变体×档位四线 ---------- */
   const cpuDist = useMemo(() => {
     if (!data) return null;
     const entry = CONTAINERS.find(([k]) => k === resChart);
-    const match = (c: string) => c === (entry?.[2] || "") || (!!entry && entry[2] !== "docker-jmeter-run" && false) || c.startsWith(entry?.[2] || "");
-    const labels = [];
+    if (!entry) return null;
+    const labels: string[] = [];
     for (let lo = 0; lo < 220; lo += 10) labels.push(`${lo}-${lo + 10}`);
     labels.push("220+");
-    const agg = { abA: new Array(labels.length).fill(0), abB: new Array(labels.length).fill(0) };
-    const counts = { abA: 0, abB: 0 };
+    const groups: Record<string, Record<string, number[]>> = {};
     for (const k of Object.keys(cells)) {
-      const v = k.split("|")[1];
+      const [ep, v, t] = k.split("|");
+      const g = `${v}·${t}`;
+      (groups[g] = groups[g] || {})[v] = groups[g][v] || new Array(labels.length).fill(0);
       const ss = cells[k]?.resSeries;
       if (!ss) continue;
       for (const p of ss) {
-        if (!match(p.container)) continue;
+        if (p.container !== entry[2]) continue;
         let bi = labels.length - 1;
         for (let i = 0; i < labels.length; i++) {
           const lo = i * 10;
           if (p.cpu >= lo && p.cpu < lo + 10) { bi = i; break; }
         }
-        agg[v][bi] += 5;
-        counts[v]++;
+        groups[g][v][bi] += 5;
       }
     }
-    const mk = (name: string, v: string, color: string) => ({
-      name, type: "line" as const, symbol: "circle", symbolSize: 6,
-      lineStyle: { width: 2.4 }, itemStyle: { color },
-      data: labels.map((_, i) => Math.round(agg[v][i] * 10) / 10),
-    });
+    const styles: [string, string, string][] = [
+      ["abA", "500", "#9ca3af"], ["abA", "1000", "#4b5563"],
+      ["abB", "500", "#93c5fd"], ["abB", "1000", "#2563eb"],
+    ];
+    const series = styles.map(([v, t, color]) => {
+      const g = `${v}·${t}`;
+      if (!groups[g]) return null;
+      return {
+        name: `${v === "abA" ? "A" : "B"}·${t}`, type: "line" as const,
+        symbol: "circle", symbolSize: 5,
+        lineStyle: { width: 2.2, type: v === "abA" ? "solid" : "dashed" },
+        itemStyle: { color }, data: groups[g][v].map((x: number) => Math.round(x * 10) / 10),
+      };
+    }).filter(Boolean);
     return {
       ...ANIM,
       tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v} 秒` },
@@ -196,46 +205,58 @@ export default function ReportPage() {
       grid: { left: 56, right: 24, top: 44, bottom: 56 },
       xAxis: { type: "category", data: labels, name: "CPU 利用率 %", ...axis, axisLabel: { ...axis.axisLabel, rotate: 30 } },
       yAxis: { type: "value", name: "累计时长 秒", ...axis },
-      series: [mk(`${CONTAINER_LABEL[resChart]}/A`, "abA", pal.a), mk(`${CONTAINER_LABEL[resChart]}/B`, "abB", pal.b)],
+      series,
     };
   }, [data, dark, resChart]);
-  /* ---------- 内存占时分布: x=内存档位, y=累计时长, A/B 双线 ---------- */
+
+  /* ---------- 内存占时分布: x=内存档位, y=累计时长, 按变体×档位四线 ---------- */
   const memDist = useMemo(() => {
     if (!data) return null;
     const entry = CONTAINERS.find(([k]) => k === resChart);
     if (!entry) return null;
-    const samples: Record<string, number[]> = { abA: [], abB: [] };
+    const raw: Record<string, Record<string, number[]>> = {};
     for (const k of Object.keys(cells)) {
-      const v = k.split("|")[1];
+      const [ep, v, t] = k.split("|");
+      const g = `${v}·${t}`;
+      (raw[g] = raw[g] || {})[v] = raw[g][v] || [];
       const ss = cells[k]?.resSeries;
       if (!ss) continue;
       for (const p of ss) {
-        if (p.container === entry[2] && p.mem > 0) samples[v].push(p.mem);
+        if (p.container === entry[2] && p.mem > 0) raw[g][v].push(p.mem);
       }
     }
-    const maxMem = Math.max(1, ...samples.abA, ...samples.abB);
+    const maxMem = Math.max(1, ...Object.values(raw).flatMap((vv: any) => Object.values(vv).flat().map((x: number) => x)));
     const step = Math.max(50, Math.ceil(maxMem / 10 / 50) * 50);
     const nb = Math.ceil(maxMem / step) + 1;
     const labels = Array.from({ length: nb }, (_, i) => `${i * step}`);
-    const mk = (name: string, v: string, color: string) => ({
-      name, type: "line" as const, symbol: "circle", symbolSize: 6,
-      lineStyle: { width: 2.4 }, itemStyle: { color },
-      data: labels.map((_, i) => {
-        const lo = i * step, hi = lo + step;
-        return Math.round(samples[v].filter((m) => m >= lo && m < hi).length * 5 * 10) / 10;
-      }),
-    });
+    const styles: [string, string, string][] = [
+      ["abA", "500", "#9ca3af"], ["abA", "1000", "#4b5563"],
+      ["abB", "500", "#93c5fd"], ["abB", "1000", "#2563eb"],
+    ];
+    const series = styles.map(([v, t, color]) => {
+      const g = `${v}·${t}`;
+      if (!raw[g]) return null;
+      return {
+        name: `${v === "abA" ? "A" : "B"}·${t}`, type: "line" as const,
+        symbol: "circle", symbolSize: 5,
+        lineStyle: { width: 2.2, type: v === "abA" ? "solid" : "dashed" },
+        itemStyle: { color },
+        data: labels.map((_, i) => {
+          const lo = i * step, hi = lo + step;
+          return Math.round(raw[g][v].filter((m: number) => m >= lo && m < hi).length * 5 * 10) / 10;
+        }),
+      };
+    }).filter(Boolean);
     return {
       ...ANIM,
       tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v} 秒` },
       legend: { top: 0, textStyle: { color: pal.txt } },
-      grid: { left: 60, right: 20, top: 40, bottom: 56 },
+      grid: { left: 60, right: 20, top: 44, bottom: 56 },
       xAxis: { type: "category", data: labels, name: "内存档位 MiB", ...axis, axisLabel: { ...axis.axisLabel, rotate: 30 } },
       yAxis: { type: "value", name: "累计时长 秒", ...axis },
-      series: [mk(`${entry[1]}/A`, "abA", pal.a), mk(`${entry[1]}/B`, "abB", pal.b)],
+      series,
     };
   }, [data, dark, resChart]);
-
 
   if (err) {
     return <div className="shell items-center justify-center"><div className="text-sm text-muted-foreground">{err}</div></div>;
@@ -374,7 +395,32 @@ export default function ReportPage() {
                   ))}
                 </div>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">5s 粒度全容器采样 · CPU 占时分布: x=利用率档位, y=该档位累计时长（秒）· 图例可开关</p>
+              <p className="mt-2 text-xs text-muted-foreground">5s 粒度全容器采样 · 占时分布: x=利用率/内存档位, y=该档位累计时长（秒）· 图例可开关 · A·500=虚线浅灰, A·1000=实线深灰, B·500=虚线浅蓝, B·1000=实线蓝</p>
+              <div className="mt-4 overflow-x-auto rounded-xl border bg-card p-2">
+                <table className="dtable">
+                  <thead>
+                    <tr><th>相位</th><th className="text-right">Portal CPU 均/峰 %</th><th className="text-right">Portal 内存峰 MiB</th><th className="text-right">MySQL CPU 均/峰 %</th></tr>
+                  </thead>
+                  <tbody>
+                    {Object.keys(cells).sort((a, b) => {
+                      const [ea, va, ta] = a.split("|"), [eb, vb, tb] = b.split("|");
+                      return +ta - +tb || ea.localeCompare(eb);
+                    }).map((k) => {
+                      const [ep, v, t] = k.split("|");
+                      const r = cells[k]?.res || {};
+                      const g = (c: string, x: string) => r[c] ? num(r[c][x] / 100, 2) : "—";
+                      return (
+                        <tr key={k}>
+                          <td className="l2num whitespace-nowrap">{ep === "abA" ? "A" : ep === "abB" ? "B" : ep} · {v === "abA" ? "A" : v === "abB" ? "B" : v} · {t}</td>
+                          <td className="l2num text-right">{g("mall-svc-portal", "cpuAvg")} / {g("mall-svc-portal", "cpuMax")}</td>
+                          <td className="l2num text-right">{r["mall-svc-portal"] ? num(r["mall-svc-portal"].memMax, 0) : "—"}</td>
+                          <td className="l2num text-right">{g("mall-mysql", "cpuAvg")} / {g("mall-mysql", "cpuMax")}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
               <div className="mt-4 rounded-xl border bg-card p-3">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">CPU 占时分布（{CONTAINER_LABEL[resChart]}）</div>
                 <Chart option={cpuDist} height={340} />
