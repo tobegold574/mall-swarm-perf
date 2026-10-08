@@ -6,6 +6,7 @@ import com.macro.mall.portal.repository.MemberProductCollectionRepository;
 import com.macro.mall.portal.service.MemberCollectionService;
 import com.macro.mall.portal.service.UmsMemberService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,8 +34,13 @@ public class MemberCollectionServiceImpl implements MemberCollectionService {
         productCollection.setMemberIcon(member.getIcon());
         MemberProductCollection findCollection = productCollectionRepository.findByMemberIdAndProductId(productCollection.getMemberId(), productCollection.getProductId());
         if (findCollection == null) {
-            productCollectionRepository.save(productCollection);
-            count = 1;
+            try {
+                productCollectionRepository.save(productCollection);
+                count = 1;
+            } catch (DuplicateKeyException e) {
+                // 并发下唯一索引(memberId,productId)兜底: 重复插入视为幂等, 不计新增
+                count = 0;
+            }
         }
         return count;
     }
