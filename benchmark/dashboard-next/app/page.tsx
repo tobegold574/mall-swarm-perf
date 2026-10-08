@@ -238,42 +238,6 @@ export default function ReportPage() {
     };
   }, [data, dark, resChart]);
 
-  /* ---------- 内存占时分布: x=内存档位, y=累计时长, A/B 双线 ---------- */
-  const memDist = useMemo(() => {
-    if (!data) return null;
-    const entry = CONTAINERS.find(([k]) => k === resChart);
-    if (!entry) return null;
-    const samples: Record<string, number[]> = { abA: [], abB: [] };
-    for (const k of Object.keys(cells)) {
-      const v = k.split("|")[1];
-      const ss = cells[k]?.resSeries;
-      if (!ss) continue;
-      for (const p of ss) {
-        if (p.container === entry[2] && p.mem > 0) samples[v].push(p.mem);
-      }
-    }
-    const maxMem = Math.max(1, ...samples.abA, ...samples.abB);
-    const step = Math.max(50, Math.ceil(maxMem / 10 / 50) * 50);
-    const nb = Math.ceil(maxMem / step) + 1;
-    const labels = Array.from({ length: nb }, (_, i) => `${i * step}`);
-    const mk = (name: string, v: string, color: string) => ({
-      name, type: "line" as const, symbol: "circle", symbolSize: 6,
-      lineStyle: { width: 2.4 }, itemStyle: { color },
-      data: labels.map((_, i) => {
-        const lo = i * step, hi = lo + step;
-        return Math.round(samples[v].filter((m) => m >= lo && m < hi).length * 5 * 10) / 10;
-      }),
-    });
-    return {
-      ...ANIM,
-      tooltip: { trigger: "axis", valueFormatter: (v: number) => `${v} 秒` },
-      legend: { top: 0, textStyle: { color: pal.txt } },
-      grid: { left: 60, right: 20, top: 40, bottom: 56 },
-      xAxis: { type: "category", data: labels, name: "内存档位 MiB", ...axis, axisLabel: { ...axis.axisLabel, rotate: 30 } },
-      yAxis: { type: "value", name: "累计时长 秒", ...axis },
-      series: [mk(`${entry[1]}/A`, "abA", pal.a), mk(`${entry[1]}/B`, "abB", pal.b)],
-    };
-  }, [data, dark, resChart]);
 
   if (err) {
     return <div className="shell items-center justify-center"><div className="text-sm text-muted-foreground">{err}</div></div>;
