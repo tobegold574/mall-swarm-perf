@@ -21,7 +21,7 @@ function Chart({ option, height = 320 }: { option: any; height?: number }) {
 }
 
 const RUNGS = [100, 200, 500, 1000];
-const SECTIONS = [["summary", "总体TPS"], ["write", "Mongo/Redis 读写"], ["resource", "资源峰值"]];
+const SECTIONS = [["summary", "总体TPS"], ["throughput", "吞吐"], ["write", "Mongo/Redis 读写"], ["resource", "资源峰值"]];
 const ANIM = { animationDuration: 600, animationEasing: "cubicOut" as const };
 const key = (img: string, vt: string, t: number) => `${img}|${vt}|${t}`;
 const short = (ep: string) => ep.replace(/^(admin|portal)_/, "");
@@ -244,26 +244,6 @@ export default function ReportPage() {
               <h3 className="mt-6 text-sm font-semibold text-muted-foreground">全档位趋势 · 有效TPS（成功请求/秒）</h3>
               <div className="mt-3 rounded-xl border bg-card p-4"><Chart option={scalability} height={360} /></div>
 
-              <h3 className="mt-8 text-sm font-semibold text-muted-foreground">分接口有效TPS · 每档一张</h3>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                {RUNGS.map((t) => (
-                  <div key={`tps${t}`} className="rounded-xl border bg-card p-3">
-                    <div className="mb-1 text-xs font-medium text-muted-foreground">并发 {t}</div>
-                    <Chart option={rungBars("tps", t)} height={280} />
-                  </div>
-                ))}
-              </div>
-
-              <h3 className="mt-8 text-sm font-semibold text-muted-foreground">分接口 P50 · 每档一张</h3>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                {RUNGS.map((t) => (
-                  <div key={`p${t}`} className="rounded-xl border bg-card p-3">
-                    <div className="mb-1 text-xs font-medium text-muted-foreground">并发 {t}</div>
-                    <Chart option={rungBars("p50", t)} height={280} />
-                  </div>
-                ))}
-              </div>
-
               <h3 className="mt-8 text-sm font-semibold text-muted-foreground">分接口错误率对比</h3>
               <div className="mt-3 flex items-center gap-3">
                 <div className="seg">
@@ -334,6 +314,31 @@ export default function ReportPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </section>
+
+            {/* ============ 吞吐 ============ */}
+            <section id="throughput" className="l2section l2fade mt-14 scroll-mt-24">
+              <h2 className="ink-title text-lg font-bold tracking-widest">吞吐</h2>
+
+              <h3 className="mt-5 text-sm font-semibold text-muted-foreground">分接口有效TPS · 每档一张</h3>
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                {RUNGS.map((t) => (
+                  <div key={`tps${t}`} className="rounded-xl border bg-card p-3">
+                    <div className="mb-1 text-xs font-medium text-muted-foreground">并发 {t}</div>
+                    <Chart option={rungBars("tps", t)} height={280} />
+                  </div>
+                ))}
+              </div>
+
+              <h3 className="mt-8 text-sm font-semibold text-muted-foreground">分接口 P50 · 每档一张</h3>
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                {RUNGS.map((t) => (
+                  <div key={`p${t}`} className="rounded-xl border bg-card p-3">
+                    <div className="mb-1 text-xs font-medium text-muted-foreground">并发 {t}</div>
+                    <Chart option={rungBars("p50", t)} height={280} />
+                  </div>
+                ))}
               </div>
             </section>
 
