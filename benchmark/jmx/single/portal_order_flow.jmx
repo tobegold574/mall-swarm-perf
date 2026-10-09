@@ -66,6 +66,7 @@
               </elementProp>
             </collectionProp>
           </HeaderManager>
+            <hashTree/>
           <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
             <collectionProp name="Asserion.test_strings">
               <stringProp name="51588">&quot;code&quot;:200</stringProp>
@@ -75,6 +76,7 @@
             <boolProp name="Assertion.assume_success">false</boolProp>
             <intProp name="Assertion.test_type">16</intProp>
           </ResponseAssertion>
+            <hashTree/>
         </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="flow_generate_order" enabled="true">
@@ -110,6 +112,7 @@
               </elementProp>
             </collectionProp>
           </HeaderManager>
+            <hashTree/>
         </hashTree>
 
       </hashTree>

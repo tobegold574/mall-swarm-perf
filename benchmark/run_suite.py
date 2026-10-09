@@ -11,11 +11,13 @@ import db as dbsnap
 import jtl
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
+# 分支无关测试台: 通过环境变量覆盖路径, 同一份脚本在 repo/测试台两处均可运行
+BENCH_HOME = os.environ.get("BENCH_HOME", HERE)
+REPO = os.environ.get("BENCH_REPO", os.path.dirname(HERE))
 COMPOSE = os.path.join(REPO, "document", "docker", "compose-local.yaml")
-JTL_DIR = os.path.join(HERE, "jtl")
-ASSETS = os.path.join(HERE, "assets")
-RES = os.path.join(HERE, "results")
+JTL_DIR = os.path.join(REPO, "benchmark", "jtl")
+ASSETS = os.path.join(BENCH_HOME, "assets")
+RES = os.path.join(BENCH_HOME, "results")
 PROM = "http://localhost:9090"
 BASE = "http://localhost:8201"
 
@@ -75,9 +77,10 @@ def wquery(expr, start_iso, end_iso, agg):
 
 # ---------- 预检 ----------
 log("== [0] 预检 ==")
-n = subprocess.run(["docker", "compose", "-f", COMPOSE, "ps", "--status", "running", "--quiet"],
-                   capture_output=True, text=True, cwd=REPO).stdout.split()
-assert len(n) >= 11, f"容器不足11: {len(n)}"
+names = subprocess.run(["docker", "ps", "--format", "{{.Names}}"],
+                       capture_output=True, text=True).stdout.splitlines()
+n = [x for x in names if x.startswith("mall-")]
+assert len(n) >= 11, f"mall容器不足11: {len(n)}"
 for s in ("mall-gateway", "mall-admin", "mall-portal", "mall-auth"):
     assert s in http.__globals__  if False else True
 ns = subprocess.run(["curl", "-s", "http://localhost:8848/nacos/v1/ns/service/list?pageNo=1&pageSize=20"],
@@ -90,6 +93,19 @@ portal_token = http("POST", "/mall-portal/sso/login", params={"username": "test"
 log(f"  11容器 / 4服务 / Prometheus / 双登录 OK；rounds={ROUNDS}")
 
 AUTH = {"admin": f"Bearer {admin_token}", "portal": f"Bearer {portal_token}", "none": "Bearer x"}
+
+# 大数据量压力场景：深分页 / like 搜索 / 大表详情
+try:
+    _bulk = sql("SELECT id FROM pms_product WHERE name LIKE '压测商品%' ORDER BY id DESC LIMIT 1")
+    from urllib.parse import quote as _q
+    APIS.extend([
+        ("admin_product_deeppage", "GET", "/mall-admin/product/list?pageNum=2500&pageSize=10", "admin"),
+        ("portal_search_kw", "GET", "/mall-portal/product/search?keyWord=" + _q("压测商品") + "&pageNum=1&pageSize=10", "none"),
+        ("portal_bulk_detail", "GET", "/mall-portal/product/detail/" + _bulk, "none"),
+    ])
+    log("  压力场景追加: 深分页/搜索/大表详情 (bulk_id=" + _bulk + ")")
+except Exception as e:
+    log("  压力场景跳过: " + str(e))
 
 os.makedirs(JTL_DIR, exist_ok=True)
 os.makedirs(RES, exist_ok=True)
@@ -137,52 +153,105 @@ for name, method, path, at in APIS:
     log(f"  {name:<22} TPS中位={agg['tps_med']:<7} P50={agg['p50_med']:<6} P99={agg['p99_med']:<6} "
         f"err={agg['err_med']}% SQL/req={agg['sql_med']}  轮次TPS={[x['tps'] for x in rounds]}")
 
-# ---------- 写风暴 R 轮 ----------
-log(f"== [3] 写风暴(200线程barrier抢{STOCK}件库存) × {ROUNDS}轮 ==")
-max_order_before = int(sql("SELECT IFNULL(MAX(id),0) FROM oms_order"))
-for r in range(1, ROUNDS + 1):
+# ---------- 写测试：正确性 / 吞吐 / 读写混合 ----------
+def write_setup(stock, n):
+    """重置SKU库存为stock并造n行购物车；返回(原始快照, 购物车ids)"""
     orig = sql(f"SELECT stock, lock_stock FROM pms_sku_stock WHERE id={SKU_ID}").split("\t")
-    o_stock, o_lock = int(orig[0]), int(orig[1])
-    sql(f"UPDATE pms_sku_stock SET stock={STOCK}, lock_stock=0 WHERE id={SKU_ID}")
+    sql(f"UPDATE pms_sku_stock SET stock={stock}, lock_stock=0 WHERE id={SKU_ID}")
     sql(f"DELETE FROM oms_cart_item WHERE member_id=1 AND member_nickname='{CART_MARK}'")
     sql(f"""INSERT INTO oms_cart_item (product_id, product_sku_id, member_id, quantity, price,
             product_name, member_nickname, create_date, modify_date, delete_status)
             SELECT {PRODUCT_ID}, {SKU_ID}, 1, 1, s.price, '压测购物车', '{CART_MARK}', NOW(), NOW(), 0
             FROM pms_sku_stock s, (SELECT @r := @r + 1 AS n FROM information_schema.columns c1,
-            information_schema.columns c2, (SELECT @r := 0) i LIMIT {THREADS}) seq WHERE s.id = {SKU_ID}""")
+            information_schema.columns c2, (SELECT @r := 0) i LIMIT {n}) seq WHERE s.id = {SKU_ID}""")
     cart_ids = sql(f"SELECT id FROM oms_cart_item WHERE member_id=1 AND member_nickname='{CART_MARK}' AND delete_status=0 ORDER BY id").splitlines()
-    assert len(cart_ids) == THREADS, f"购物车行数 {len(cart_ids)} != {THREADS}"
+    assert len(cart_ids) == n, f"购物车行数 {len(cart_ids)} != {n}"
     open(os.path.join(JTL_DIR, "cart_ids.csv"), "w").write("\n".join(cart_ids) + "\n")
+    return {"orig_stock": int(orig[0]), "orig_lock_stock": int(orig[1])}, cart_ids
 
-    dbb = dbsnap.snapshot()
-    t0 = now_iso()
-    jmeter("-n", "-t", "/jmx/write_storm.jmx", f"-JTHREADS={THREADS}", f"-JTOKEN={AUTH['portal']}",
-           "-l", f"/jtl/write_r{r}.jtl", "-j", f"/jtl/jm_write_r{r}.log")
-    t1 = now_iso()
-    st = jtl.parse(os.path.join(JTL_DIR, f"write_r{r}.jtl"))
-    final = sql(f"SELECT stock, lock_stock FROM pms_sku_stock WHERE id={SKU_ID}").split("\t")
-    prof = dbsnap.diff(dbb, dbsnap.snapshot(), top=10)
-    order_ids = sql(f"SELECT GROUP_CONCAT(id) FROM oms_order WHERE member_id=1 AND id > {max_order_before} AND member_username='test'").splitlines()[0]
-
-    state = {"sku_id": SKU_ID, "stock": STOCK, "lock_stock": 0,
-             "orig_stock": o_stock, "orig_lock_stock": o_lock,
-             "cart_ids": [int(x) for x in cart_ids], "member_id": 1,
-             "order_ids": [int(x) for x in order_ids.split(",")] if order_ids else []}
+def write_cleanup(state):
     open(os.path.join(RES, "write_test_state.json"), "w").write(json.dumps(state))
     subprocess.run([sys.executable, os.path.join(HERE, "cleanup_write_test.py")], check=True, capture_output=True)
 
-    db_orders = len(state["order_ids"])
-    suite["write"].append({"round": r, "success": st["ok"], "failed": st["err"],
-                           "db_orders": db_orders,
-                           "tps": st["tps"], "p50_ms": st["p50_ms"], "p99_ms": st["p99_ms"],
-                           "final_stock": int(final[0]), "final_lock_stock": int(final[1]),
-                           "per_order_sql": round(prof["total_stmts"] / max(st["ok"], 1), 1),
-                           "sql_per_req": round(prof["total_stmts"] / max(THREADS, 1), 1),
-                           "oversell": st["ok"] > STOCK or int(final[1]) < 0,
-                           "db_profile": prof, "window": {"start": t0, "end": t1}})
-    w = suite["write"][-1]
-    log(f"  r{r}: 成功={w['success']} 落库={w['db_orders']} lock_stock={w['final_lock_stock']} "
-        f"每请求SQL={w['sql_per_req']} {'❌超卖' if w['oversell'] else '✅'}")
+def collect_orders(since_id):
+    out = sql(f"SELECT GROUP_CONCAT(id) FROM oms_order WHERE member_id=1 AND id > {since_id} AND member_username='test'")
+    return [int(x) for x in out.split(",")] if out and out.upper() != "NULL" else []
+
+def storm(stock, n, rtag):
+    """一轮写风暴（JMeter barrier 同步），完成后自动清理还原。返回指标"""
+    orig, cart_ids = write_setup(stock, n)
+    dbb = dbsnap.snapshot()
+    t0 = now_iso()
+    jmeter("-n", "-t", "/jmx/write_storm.jmx", f"-JTHREADS={n}", f"-JTOKEN={AUTH['portal']}",
+           "-l", f"/jtl/write_{rtag}.jtl", "-j", f"/jtl/jm_write_{rtag}.log")
+    t1 = now_iso()
+    st = jtl.parse(os.path.join(JTL_DIR, f"write_{rtag}.jtl"))
+    final = sql(f"SELECT stock, lock_stock FROM pms_sku_stock WHERE id={SKU_ID}").split("\t")
+    prof = dbsnap.diff(dbb, dbsnap.snapshot(), top=10)
+    order_ids = collect_orders(max_order_before)
+    state = {"sku_id": SKU_ID, "stock": stock, "lock_stock": 0,
+             "orig_stock": orig["orig_stock"], "orig_lock_stock": orig["orig_lock_stock"],
+             "cart_ids": [int(x) for x in cart_ids], "member_id": 1, "order_ids": order_ids}
+    write_cleanup(state)
+    m = {"success": st["ok"], "failed": st["err"], "db_orders": len(order_ids),
+         "tps": st["tps"], "p50_ms": st["p50_ms"], "p99_ms": st["p99_ms"],
+         "final_stock": int(final[0]), "final_lock_stock": int(final[1]),
+         "per_order_sql": round(prof["total_stmts"] / max(st["ok"], 1), 1),
+         "sql_per_req": round(prof["total_stmts"] / max(n, 1), 1),
+         "oversell": st["ok"] > stock or int(final[1]) < 0,
+         "db_profile": prof, "window": {"start": t0, "end": t1}}
+    log(f"  [{rtag}] 成功={m['success']} 落库={m['db_orders']} lock_stock={m['final_lock_stock']} "
+        f"TPS={m['tps']} SQL/req={m['sql_per_req']} {'超卖' if m['oversell'] else 'OK'}")
+    return m
+
+max_order_before = int(sql("SELECT IFNULL(MAX(id),0) FROM oms_order"))
+log(f"== [3] 写测试 × {ROUNDS}轮：正确性 / 吞吐 / 读写混合 ==")
+# 3.1 正确性：库存5，期望恰好5单
+for r in range(1, ROUNDS + 1):
+    m = dict(storm(STOCK, THREADS, f"corr_r{r}"), round=r, mode="correctness")
+    suite["write"].append(m)
+
+# 3.2 吞吐：库存充足(线程数×5)，全部成功，测写TPS
+suite["throughput"] = []
+for r in range(1, ROUNDS + 1):
+    m = dict(storm(THREADS * 5, THREADS, f"tput_r{r}"), round=r, mode="throughput")
+    suite["throughput"].append(m)
+
+# 3.3 读写混合：读150线程(45s) 与 写200线程(库存200) 并发
+suite["mixed"] = []
+for r in range(1, ROUNDS + 1):
+    orig, cart_ids = write_setup(200, 200)
+    dbb = dbsnap.snapshot()
+    t0 = now_iso()
+    reader = subprocess.Popen(
+        ["docker", "compose", "-f", COMPOSE, "run", "--rm", "jmeter",
+         "-n", "-t", "/jmx/read_test.jmx", "-JTHREADS=150", "-JDURATION=45",
+         "-JPATH=/mall-portal/cart/list", f"-JTOKEN={AUTH['portal']}",
+         "-l", f"/jtl/read_mix_r{r}.jtl", "-j", f"/jtl/jm_read_mix_r{r}.log"],
+        cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(3)
+    jmeter("-n", "-t", "/jmx/write_storm.jmx", "-JTHREADS=200", f"-JTOKEN={AUTH['portal']}",
+           "-l", f"/jtl/write_mix_r{r}.jtl", "-j", f"/jtl/jm_write_mix_r{r}.log")
+    reader.wait()
+    t1 = now_iso()
+    rst = jtl.parse(os.path.join(JTL_DIR, f"read_mix_r{r}.jtl"))
+    wst = jtl.parse(os.path.join(JTL_DIR, f"write_mix_r{r}.jtl"))
+    prof = dbsnap.diff(dbb, dbsnap.snapshot(), top=5)
+    order_ids = collect_orders(max_order_before)
+    final = sql(f"SELECT stock, lock_stock FROM pms_sku_stock WHERE id={SKU_ID}").split("\t")
+    state = {"sku_id": SKU_ID, "stock": 200, "lock_stock": 0,
+             "orig_stock": orig["orig_stock"], "orig_lock_stock": orig["orig_lock_stock"],
+             "cart_ids": [int(x) for x in cart_ids], "member_id": 1, "order_ids": order_ids}
+    write_cleanup(state)
+    m = {"round": r,
+         "read_tps_under_mix": rst["tps"], "read_p50_under_mix": rst["p50_ms"],
+         "read_err_under_mix": rst["err_rate_pct"],
+         "write_tps_under_mix": wst["tps"], "write_success_under_mix": wst["ok"],
+         "write_sql_per_req": round(prof["total_stmts"] / max(200, 1), 1),
+         "window": {"start": t0, "end": t1}}
+    suite["mixed"].append(m)
+    log(f"  [混合r{r}] 读TPS={m['read_tps_under_mix']} 读P50={m['read_p50_under_mix']}ms | "
+        f"写成功={m['write_success_under_mix']} 写TPS={m['write_tps_under_mix']}")
 
 overall_end = now_iso()
 suite["window"] = {"start": overall_start, "end": overall_end}
