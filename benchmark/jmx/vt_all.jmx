@@ -33,7 +33,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="admin_product_list" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
@@ -50,7 +60,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="admin_category_tree" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
@@ -67,7 +87,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="admin_product_deeppage" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
@@ -84,7 +114,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="portal_home_content" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
@@ -101,7 +141,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="portal_product_detail" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
@@ -118,7 +168,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="portal_search_kw" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
@@ -158,7 +218,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="portal_bulk_detail" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
@@ -175,7 +245,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="portal_cart_list" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
@@ -192,7 +272,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
 
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="portal_member_info" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
@@ -209,7 +299,17 @@
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
         </HTTPSamplerProxy>
 
-        <hashTree/>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
+        </hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="portal_collection_add" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="HTTPArgumentsPanel" testname="args">
             <collectionProp name="Arguments.arguments">

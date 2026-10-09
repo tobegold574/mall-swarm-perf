@@ -14,7 +14,7 @@
     <hashTree>
       <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="member_tokens" enabled="true">
         <stringProp name="filename">/jtl/members.csv</stringProp>
-        <stringProp name="variableNames">MEMBER_TOKEN</stringProp>
+        <stringProp name="variableNames">MEMBER_ID,MEMBER_TOKEN</stringProp>
         <boolProp name="recycle">false</boolProp>
         <boolProp name="stopThread">true</boolProp>
         <stringProp name="delimiter">,</stringProp>
@@ -33,7 +33,7 @@
         </elementProp>
       </ThreadGroup>
       <hashTree>
-        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="cart_add" enabled="true">
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="portal_cart_add" enabled="true">
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="args">
             <collectionProp name="Arguments.arguments">
               <elementProp name="" elementType="HTTPArgument">
@@ -66,6 +66,15 @@
               </elementProp>
             </collectionProp>
           </HeaderManager>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="业务成功码" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="51588">&quot;code&quot;:200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message"></stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+          </ResponseAssertion>
         </hashTree>
 
       </hashTree>
