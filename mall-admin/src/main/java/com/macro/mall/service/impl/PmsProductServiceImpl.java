@@ -4,6 +4,7 @@ package com.macro.mall.service.impl;
 import cn.hutool.core.collection.CollUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.macro.mall.dao.*;
 import com.macro.mall.dto.PmsProductParam;
@@ -217,6 +218,24 @@ public class PmsProductServiceImpl implements PmsProductService {
      */
     @Override
     public List<PmsProduct> list(PmsProductQueryParam productQueryParam, Integer pageSize, Integer pageNum) {
+        // 深分页优化: 无可选过滤条件时走延迟关联(覆盖索引扫描+按主键回表),
+        // 避免 LIMIT 深偏移的10万行全表扫描; 行集与原路径完全一致
+        boolean hasFilter = productQueryParam.getPublishStatus() != null
+                || productQueryParam.getVerifyStatus() != null
+                || !StringUtils.isEmpty(productQueryParam.getKeyword())
+                || !StringUtils.isEmpty(productQueryParam.getProductSn())
+                || productQueryParam.getBrandId() != null
+                || productQueryParam.getProductCategoryId() != null;
+        if (!hasFilter) {
+            long total = productMapper.selectCount(new LambdaQueryWrapper<PmsProduct>()
+                    .eq(PmsProduct::getDeleteStatus, 0));
+            long offset = (long) (pageNum - 1) * pageSize;
+            List<PmsProduct> list = productMapper.selectPageDeferred(offset, pageSize);
+            Page<PmsProduct> page = new Page<>(pageNum, pageSize);
+            page.setTotal(total);
+            page.addAll(list);
+            return page;
+        }
         PageHelper.startPage(pageNum, pageSize);
         LambdaQueryWrapper<PmsProduct> wrapper = new LambdaQueryWrapper<PmsProduct>()
                 .eq(PmsProduct::getDeleteStatus, 0);

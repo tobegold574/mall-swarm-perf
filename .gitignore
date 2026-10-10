@@ -19,3 +19,5 @@ jmeter.log
 .next/
 node_modules/
 benchmark/results/
+
+benchmark/*.log
