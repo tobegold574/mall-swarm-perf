@@ -6,17 +6,32 @@
 import csv
 
 def _bucket(row):
-    """把一条失败样本归到可读的桶: timeout/conn/biz_fail/具体HTTP码"""
+    """把一条失败样本归到语义桶(严格区分'慢'与'崩'):
+    - timeout: 读超时——服务已受理但处理不过来(慢)
+    - conn_timeout: 连接建立超时——服务不可达/不接受连接(崩溃族)
+    - client_pool_timeout: JMeter自身连接池等不到空闲连接——施压侧伪失败, 不算服务故障
+    - conn: 连接拒绝/重置/无响应/DNS失败(崩溃族)
+    - biz_fail: 2xx但断言失败——业务拒绝(如库存不足)
+    - http_500: 应用异常; http_502/503/504_gateway: 网关/上游不可用(崩溃族); 其余4xx/5xx按原码
+    """
     rc = (row.get("responseCode") or "").strip()
     if rc.startswith("Non HTTP response code:"):
         exc = rc.split(":", 1)[1].strip()
+        if "ConnectionPoolTimeout" in exc:
+            return "client_pool_timeout"
+        if "ConnectTimeout" in exc:
+            return "conn_timeout"
         if "Timeout" in exc:
             return "timeout"
-        if any(k in exc for k in ("Connect", "UnknownHost", "Reset", "Closed")):
+        if any(k in exc for k in ("ConnectException", "NoHttpResponse", "UnknownHost", "Reset", "Closed")):
             return "conn"
         return exc.split(".")[-1][:30]
     if rc.isdigit():
-        return "biz_fail" if rc.startswith("2") else f"http_{rc}"
+        if rc.startswith("2"):
+            return "biz_fail"
+        if rc in ("502", "503", "504"):
+            return f"http_{rc}_gateway"
+        return f"http_{rc}"
     return "unknown"
 
 def parse(path):
