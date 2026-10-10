@@ -54,7 +54,7 @@ export default function SuitesPage() {
     const d = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
     setDark(d);
     document.documentElement.classList.toggle("dark", d);
-    fetch("/api/suites").then((r) => r.json()).then((list: any[]) => {
+    fetch("api/suites").then((r) => r.json()).then((list: any[]) => {
       list.sort((x, y) => String(x.key).localeCompare(String(y.key)));
       setSuites(list);
       const lastA = [...list].reverse().find((s) => s.key.endsWith("abA"));
