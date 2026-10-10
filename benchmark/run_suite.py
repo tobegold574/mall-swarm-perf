@@ -328,7 +328,6 @@ for r in range(1, ROUNDS + 1):
          "read_ok_tps_under_mix": rst["ok_tps"], "read_p50_ok_under_mix": rst["ok_p50_ms"],
          "read_err_under_mix": rst["err_rate_pct"],
          "write_tps_under_mix": wst["tps"], "write_ok_tps_under_mix": wst["ok_tps"],
-         "write_p50_ok_under_mix": wst.get("ok_p50_ms"),
          "write_success_under_mix": wst["ok"],
          "write_sql_per_req": round(prof["total_stmts"] / max(wst["total"], 1), 1),
          "window": {"start": t0, "end": t1}}

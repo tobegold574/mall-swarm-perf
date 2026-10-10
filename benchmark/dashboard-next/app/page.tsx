@@ -310,7 +310,7 @@ export default function SuitesPage() {
               <table className="dtable">
                 <thead>
                   <tr><th>场景</th><th className="text-right">成功单</th><th className="text-right">落库单</th>
-                      <th className="text-right">lock_stock</th><th className="text-right">判定</th></tr>
+                      <th className="text-right">lock_stock</th><th className="text-right">齐射P50</th><th className="text-right">判定</th></tr>
                 </thead>
                 <tbody>
                   {[["稀缺库存抢购(5件/200人)", "write"], ["充足库存对照(1000件/200人)", "throughput"]].map(([scene, field]: any) => (
@@ -328,12 +328,19 @@ export default function SuitesPage() {
                         }
                         const verdict = rows.length ? (failures.length ? failures.join("、") : "正常") : "—";
                         const vcls = rows.length ? (failures.length ? "text-red-500 font-semibold" : "text-emerald-600") : "text-muted-foreground";
+                        const p50v = (() => {
+                          const v = rows.map((m: any) => m.p50_ms).filter((x: any) => x !== null && x !== undefined).sort((a: number, b: number) => a - b);
+                          if (!v.length) return "—";
+                          const mid = Math.floor(v.length / 2);
+                          return num(v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2, 0);
+                        })();
                         return (
                           <tr key={scene + label}>
                             <td className="whitespace-nowrap">{scene} · {label} × {rows.length}轮</td>
                             <td className="l2num text-right">{rows.map((m: any) => m.success).join("/") || "—"}</td>
                             <td className="l2num text-right">{rows.map((m: any) => m.db_orders).join("/") || "—"}</td>
                             <td className="l2num text-right">{rows.map((m: any) => m.final_lock_stock).join("/") || "—"}</td>
+                            <td className="l2num text-right">{p50v}</td>
                             <td className={cn("l2num text-right", vcls)}>{verdict}</td>
                           </tr>
                         );
@@ -347,7 +354,7 @@ export default function SuitesPage() {
               <table className="dtable">
                 <thead>
                   <tr><th>读写混合</th><th className="text-right">读有效TPS</th><th className="text-right">读P50(成功)</th>
-                      <th className="text-right">读err%</th><th className="text-right">写成功</th><th className="text-right">写齐射P50</th></tr>
+                      <th className="text-right">读err%</th><th className="text-right">写成功</th></tr>
                 </thead>
                 <tbody>
                   {[["A", A], ["B", B]].map(([label, s]: any) => {
@@ -365,7 +372,6 @@ export default function SuitesPage() {
                         <td className="l2num text-right">{med((m: any) => m.read_p50_ok_under_mix ?? m.read_p50_under_mix)}</td>
                         <td className="l2num text-right">{med((m: any) => m.read_err_under_mix)}</td>
                         <td className="l2num text-right">{mix.map((m: any) => m.write_success_under_mix).join("/") || "—"}</td>
-                        <td className="l2num text-right">{med((m: any) => m.write_p50_ok_under_mix)}</td>
                       </tr>
                     );
                   })}
