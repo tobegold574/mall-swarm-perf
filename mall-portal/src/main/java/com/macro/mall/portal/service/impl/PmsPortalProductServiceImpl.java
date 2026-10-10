@@ -55,7 +55,7 @@ public class PmsPortalProductServiceImpl implements PmsPortalProductService {
         // 纯关键词搜索(无附加过滤): 优先走ngram全文索引; 命中0条(超高频词相关度悬崖)时回落LIKE, 泛词慢但永不丢结果
         boolean hasFilter = brandId != null || productCategoryId != null;
         if (StrUtil.isNotEmpty(keyword) && !hasFilter) {
-            long total = productMapper.countByNameFulltext(keyword);
+            long total = ftCountCache.computeIfAbsent(keyword, k -> productMapper.countByNameFulltext(k));
             if (total > 0) {
                 long offset = (long) (pageNum - 1) * pageSize;
                 List<PmsProduct> list = productMapper.searchByNameFulltext(keyword, offset, pageSize);
@@ -101,6 +101,8 @@ public class PmsPortalProductServiceImpl implements PmsPortalProductService {
         return result;
     }
 
+    /** 全文搜索的COUNT缓存(关键词→总数, 60s TTL): 免除每请求4万条目的FT索引扫描 */
+    private final Map<String, Long> ftCountCache = new ConcurrentHashMap<>();
     private final Map<Long, List<PmsProductAttribute>> attributeCache = new ConcurrentHashMap<>();
     private final Map<Long, Long> attributeCacheAt = new ConcurrentHashMap<>();
     private static final long ATTR_CACHE_TTL_MS = 60_000;

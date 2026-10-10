@@ -75,7 +75,8 @@ public class PmsProductServiceImpl implements PmsProductService {
         //创建商品
         PmsProduct product = productParam;
         product.setId(null);
-        productMapper.insert(product);
+        int result = productMapper.insert(product);
+        invalidateProductCountCache();
         //根据促销类型设置价格：会员价格、阶梯价格、满减价格
         Long productId = product.getId();
         //会员价格
@@ -220,6 +221,32 @@ public class PmsProductServiceImpl implements PmsProductService {
      * 行集与原路径完全一致
      */
     private static final long DEFERRED_JOIN_MIN_OFFSET = 1000;
+    /** 分页total的COUNT缓存(5s TTL): 免除每请求4万条目的覆盖索引扫描; 商品增删/逻辑删时失效 */
+    private volatile Long cachedDeleteStatus0Count;
+    private volatile long deleteStatus0CountAt;
+    private static final long COUNT_CACHE_TTL_MS = 5000;
+
+    private long deleteStatus0CountCached() {
+        Long v = cachedDeleteStatus0Count;
+        long now = System.currentTimeMillis();
+        if (v != null && now - deleteStatus0CountAt < COUNT_CACHE_TTL_MS) {
+            return v;
+        }
+        synchronized (this) {
+            if (cachedDeleteStatus0Count != null && System.currentTimeMillis() - deleteStatus0CountAt < COUNT_CACHE_TTL_MS) {
+                return cachedDeleteStatus0Count;
+            }
+            long c = productMapper.selectCount(new LambdaQueryWrapper<PmsProduct>()
+                    .eq(PmsProduct::getDeleteStatus, 0));
+            cachedDeleteStatus0Count = c;
+            deleteStatus0CountAt = System.currentTimeMillis();
+            return c;
+        }
+    }
+
+    private void invalidateProductCountCache() {
+        cachedDeleteStatus0Count = null;
+    }
 
     @Override
     public List<PmsProduct> list(PmsProductQueryParam productQueryParam, Integer pageSize, Integer pageNum) {
@@ -231,8 +258,7 @@ public class PmsProductServiceImpl implements PmsProductService {
                 || productQueryParam.getProductCategoryId() != null;
         long offset = (long) (pageNum - 1) * pageSize;
         if (!hasFilter && offset >= DEFERRED_JOIN_MIN_OFFSET) {
-            long total = productMapper.selectCount(new LambdaQueryWrapper<PmsProduct>()
-                    .eq(PmsProduct::getDeleteStatus, 0));
+            long total = deleteStatus0CountCached();
             List<PmsProduct> list = productMapper.selectPageDeferred(offset, pageSize);
             Page<PmsProduct> page = new Page<>(pageNum, pageSize);
             page.setTotal(total);
@@ -325,6 +351,7 @@ public class PmsProductServiceImpl implements PmsProductService {
     public int updateDeleteStatus(List<Long> ids, Integer deleteStatus) {
         PmsProduct record = new PmsProduct();
         record.setDeleteStatus(deleteStatus);
+        invalidateProductCountCache();
         return productMapper.update(record, new LambdaUpdateWrapper<PmsProduct>().in(PmsProduct::getId, ids));
     }
 
