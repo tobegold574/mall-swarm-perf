@@ -55,7 +55,7 @@ public class PmsPortalProductServiceImpl implements PmsPortalProductService {
         // 纯关键词搜索(无附加过滤): 优先走ngram全文索引; 命中0条(超高频词相关度悬崖)时回落LIKE, 泛词慢但永不丢结果
         boolean hasFilter = brandId != null || productCategoryId != null;
         if (StrUtil.isNotEmpty(keyword) && !hasFilter) {
-            long total = ftCountCache.computeIfAbsent(keyword, k -> productMapper.countByNameFulltext(k));
+            long total = ftCountTotalCached(keyword);
             if (total > 0) {
                 long offset = (long) (pageNum - 1) * pageSize;
                 List<PmsProduct> list = productMapper.searchByNameFulltext(keyword, offset, pageSize);
@@ -103,6 +103,24 @@ public class PmsPortalProductServiceImpl implements PmsPortalProductService {
 
     /** 全文搜索的COUNT缓存(关键词→总数, 60s TTL): 免除每请求4万条目的FT索引扫描 */
     private final Map<String, Long> ftCountCache = new ConcurrentHashMap<>();
+    private final Map<String, Long> ftCountCacheAt = new ConcurrentHashMap<>();
+    private static final long FT_COUNT_CACHE_TTL_MS = 60_000;
+
+    /** TTL是跨实例数据变更的一致性上界: admin侧增删商品后, 本缓存最多60s内过期重建 */
+    private long ftCountTotalCached(String keyword) {
+        Long at = ftCountCacheAt.get(keyword);
+        if (at != null && System.currentTimeMillis() - at < FT_COUNT_CACHE_TTL_MS) {
+            Long v = ftCountCache.get(keyword);
+            if (v != null) {
+                return v;
+            }
+        }
+        long total = productMapper.countByNameFulltext(keyword);
+        ftCountCache.put(keyword, total);
+        ftCountCacheAt.put(keyword, System.currentTimeMillis());
+        return total;
+    }
+
     private final Map<Long, List<PmsProductAttribute>> attributeCache = new ConcurrentHashMap<>();
     private final Map<Long, Long> attributeCacheAt = new ConcurrentHashMap<>();
     private static final long ATTR_CACHE_TTL_MS = 60_000;
