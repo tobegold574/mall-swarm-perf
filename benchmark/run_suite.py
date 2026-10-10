@@ -4,11 +4,12 @@
 用法: python3 run_suite.py [rounds]   默认 3 轮（抗 JIT 预热与偶发干扰）
 流程: 预检 → 预热(每接口2s×8线程) → 7接口读×R轮(200线程×15s) → 写风暴×R轮(200线程barrier抢5库存) → 每轮即清理 → 聚合出HTML
 """
-import json, os, subprocess, sys, time, urllib.request, urllib.parse, shutil
+import json, os, re, subprocess, sys, time, urllib.request, urllib.error, urllib.parse, shutil
 from datetime import datetime, timezone
 from statistics import median
 import db as dbsnap
 import jtl
+import res_series as rs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 分支无关测试台: 通过环境变量覆盖路径, 同一份脚本在 repo/测试台两处均可运行
@@ -24,6 +25,7 @@ BASE = "http://localhost:8201"
 ROUNDS = int(sys.argv[1]) if len(sys.argv) > 1 else 3
 THREADS = int(os.environ.get("THREADS", 200))
 DUR = int(os.environ.get("DUR", 15))
+WARM = os.environ.get("WARM", "") == "1"   # 预热批模式: 结果归档 warmup_* (看板/统计自动忽略)
 WARMUP_T, WARMUP_S = 8, 2
 SKU_ID, PRODUCT_ID, STOCK, ADDRESS_ID, CART_MARK = 99, 27, 5, 1, "bench-test"
 
@@ -75,32 +77,67 @@ def wquery(expr, start_iso, end_iso, agg):
     key = "job" if "job" in q else "container_label_com_docker_compose_service"
     return {r["metric"].get(key, "?"): float(r["value"][1]) for r in prom_instant(q, e)}
 
+def smoke_one(name, method, path, at):
+    """单发一次请求: 记录 HTTP码/业务码/耗时, 作为该变体的接口健康证明(坏接口提前暴露)"""
+    try:
+        t0 = time.time()
+        req = urllib.request.Request(BASE + path, method=method, headers={"Authorization": AUTH[at]})
+        with urllib.request.urlopen(req, timeout=35) as r:
+            body = r.read(4000).decode("utf-8", "replace")
+            http_code, ms = r.status, int((time.time() - t0) * 1000)
+        m = re.search(r'"code":\s*(-?\d+)', body)
+        biz = int(m.group(1)) if m else None
+        verdict = "OK" if http_code == 200 and biz == 200 else f"BIZ_{biz}"
+    except urllib.error.HTTPError as e:
+        http_code, ms, verdict = e.code, None, f"HTTP_{e.code}"
+        biz = None
+        try:
+            m = re.search(r'"code":\s*(-?\d+)', e.read(2000).decode("utf-8", "replace"))
+            biz = int(m.group(1)) if m else None
+        except Exception:
+            pass
+    except Exception as e:
+        http_code, biz, ms, verdict = None, None, None, f"EXC_{type(e).__name__}"
+    return {"api": name, "http": http_code, "biz": biz, "ms": ms, "verdict": verdict}
+
 # ---------- 预检 ----------
 log("== [0] 预检 ==")
 names = subprocess.run(["docker", "ps", "--format", "{{.Names}}"],
                        capture_output=True, text=True).stdout.splitlines()
 n = [x for x in names if x.startswith("mall-")]
 assert len(n) >= 11, f"mall容器不足11: {len(n)}"
-for s in ("mall-gateway", "mall-admin", "mall-portal", "mall-auth"):
-    assert s in http.__globals__  if False else True
 ns = subprocess.run(["curl", "-s", "http://localhost:8848/nacos/v1/ns/service/list?pageNo=1&pageSize=20"],
                     capture_output=True, text=True).stdout
 for s in ("mall-gateway", "mall-admin", "mall-portal", "mall-auth"):
     assert s in ns, f"Nacos未注册: {s}"
 urllib.request.urlopen(PROM + "/-/ready", timeout=5)
-admin_token = http("POST", "/mall-admin/admin/login", body={"username": "admin", "password": "macro123"})["data"]["token"]
-portal_token = http("POST", "/mall-portal/sso/login", params={"username": "test", "password": "123456"})["data"]["token"]
+def login_with_retry(kind, **kw):
+    """预检登录带重试: 压测后服务可能处于恢复期(Nacos重注册/GC), 瞬时失败不应炸掉协议"""
+    last = None
+    for i in range(5):
+        try:
+            return http("POST", **kw)["data"]["token"]
+        except Exception as e:
+            last = e
+            log(f"  {kind}登录第{i+1}次失败({type(e).__name__}), 15s后重试")
+            time.sleep(15)
+    raise last
+
+admin_token = login_with_retry("admin", path="/mall-admin/admin/login",
+                               body={"username": "admin", "password": "macro123"})
+portal_token = login_with_retry("portal", path="/mall-portal/sso/login",
+                                params={"username": "test", "password": "123456"})
 log(f"  11容器 / 4服务 / Prometheus / 双登录 OK；rounds={ROUNDS}")
 
 AUTH = {"admin": f"Bearer {admin_token}", "portal": f"Bearer {portal_token}", "none": "Bearer x"}
 
 # 大数据量压力场景：深分页 / like 搜索 / 大表详情
 try:
-    _bulk = sql("SELECT id FROM pms_product WHERE name LIKE '压测商品%' ORDER BY id DESC LIMIT 1")
+    _bulk = sql("SELECT id FROM pms_product WHERE product_sn LIKE 'SN%' ORDER BY id DESC LIMIT 1")
     from urllib.parse import quote as _q
     APIS.extend([
         ("admin_product_deeppage", "GET", "/mall-admin/product/list?pageNum=2500&pageSize=10", "admin"),
-        ("portal_search_kw", "GET", "/mall-portal/product/search?keyWord=" + _q("压测商品") + "&pageNum=1&pageSize=10", "none"),
+        ("portal_search_kw", "GET", "/mall-portal/product/search?keyword=" + _q("手机") + "&pageNum=1&pageSize=10", "none"),
         ("portal_bulk_detail", "GET", "/mall-portal/product/detail/" + _bulk, "none"),
     ])
     log("  压力场景追加: 深分页/搜索/大表详情 (bulk_id=" + _bulk + ")")
@@ -113,8 +150,33 @@ for f in os.listdir(JTL_DIR):
     os.remove(os.path.join(JTL_DIR, f))
 
 suite = {"schema": "suite_v4", "client": "JMeter-5.6.3-in-compose", "threads": THREADS,
-         "duration_s": DUR, "rounds": ROUNDS, "generated_at": now_iso(), "read": [], "write": []}
+         "duration_s": DUR, "rounds": ROUNDS, "warmup_batch": WARM,
+         "generated_at": now_iso(), "read": [], "write": []}
+
+# 运行环境指纹: 防止不同配置(VT开关/镜像版本)的数据混为一谈
+_ctn = subprocess.run(["docker", "inspect", "--format", "{{.Config.Image}} {{.Image}}",
+                       "mall-svc-gateway", "mall-svc-admin", "mall-svc-portal", "mall-svc-auth"],
+                      capture_output=True, text=True).stdout.splitlines()
+_vt = subprocess.run(["docker", "exec", "mall-svc-portal", "sh", "-c",
+                      "tr '\\0' '\\n' < /proc/1/environ | grep SPRING_THREADS_VIRTUAL_ENABLED"],
+                     capture_output=True, text=True).stdout.strip()
+_vt = _vt.split("=", 1)[-1] if _vt else "unknown"
+suite["env"] = {"vt_enabled": _vt,
+                "containers": dict(zip(["gateway", "admin", "portal", "auth"], _ctn)),
+                "nproc": os.cpu_count()}
+log(f"  环境: VT={suite['env']['vt_enabled']}")
+for line in _ctn:
+    log(f"  {line}")
 overall_start = now_iso()
+
+# ---------- 冒烟健康表: 每接口单发1次, 提前暴露该变体的坏接口 ----------
+log("== [1a] 接口冒烟健康表 ==")
+suite["smoke"] = [smoke_one(n, m_, p, a) for n, m_, p, a in APIS]
+_bad = [s for s in suite["smoke"] if s["verdict"] != "OK"]
+for s in suite["smoke"]:
+    log(f"  {s['api']:<22} http={s['http']} biz={s['biz']} {s['ms']}ms {'OK' if s['verdict'] == 'OK' else '<< FAIL ' + s['verdict']}")
+if _bad:
+    log(f"  !! {len(_bad)} 个接口冒烟失败: 其压测 TPS 不可比, 报告将按状态码单独标注")
 
 # ---------- 预热 ----------
 log("== [1] 预热 ==")
@@ -125,7 +187,7 @@ for name, method, path, at in APIS:
     log(f"  warm {name}")
 
 # ---------- 读压测 R 轮 ----------
-log(f"== [2] 读压测 7接口 × {ROUNDS}轮 ==")
+log(f"== [2] 读压测 {len(APIS)}接口 × {ROUNDS}轮 ==")
 for name, method, path, at in APIS:
     rounds = []
     for r in range(1, ROUNDS + 1):
@@ -141,17 +203,31 @@ for name, method, path, at in APIS:
         st["db_profile"] = prof
         st["window"] = {"start": t0, "end": t1}
         rounds.append(st)
+    merged = {}
+    for x in rounds:
+        for k, v in x.get("err_breakdown", {}).items():
+            merged[k] = merged.get(k, 0) + v
+    def med_or_none(key):
+        vals = [x[key] for x in rounds if x.get(key) is not None]
+        return round(median(vals)) if vals else None
     agg = {"api": name,
            "tps_med": round(median(x["tps"] for x in rounds), 1),
+           "tps_ok_med": round(median(x["ok_tps"] for x in rounds), 1),
            "p50_med": round(median(x["p50_ms"] for x in rounds)),
            "p95_med": round(median(x["p95_ms"] for x in rounds)),
            "p99_med": round(median(x["p99_ms"] for x in rounds)),
+           "p50_ok_med": med_or_none("ok_p50_ms"),
+           "p99_ok_med": med_or_none("ok_p99_ms"),
            "err_med": round(median(x["err_rate_pct"] for x in rounds), 2),
            "sql_med": round(median(x["sql_count_per_req"] or 0 for x in rounds), 1),
+           "err_top": dict(sorted(merged.items(), key=lambda i: -i[1])[:3]),
            "rounds": rounds}
     suite["read"].append(agg)
-    log(f"  {name:<22} TPS中位={agg['tps_med']:<7} P50={agg['p50_med']:<6} P99={agg['p99_med']:<6} "
-        f"err={agg['err_med']}% SQL/req={agg['sql_med']}  轮次TPS={[x['tps'] for x in rounds]}")
+    p50s = str(agg["p50_ok_med"]) if agg["p50_ok_med"] is not None else "—"
+    p99s = str(agg["p99_ok_med"]) if agg["p99_ok_med"] is not None else "—"
+    log(f"  {name:<22} 有效TPS={agg['tps_ok_med']:<7} 原始TPS={agg['tps_med']:<7} "
+        f"P50成功={p50s:<6} P99成功={p99s:<6} err={agg['err_med']}% SQL/req={agg['sql_med']}"
+        + (f"  失败归因={agg['err_top']}" if agg["err_top"] else ""))
 
 # ---------- 写测试：正确性 / 吞吐 / 读写混合 ----------
 def write_setup(stock, n):
@@ -174,12 +250,14 @@ def write_cleanup(state):
     subprocess.run([sys.executable, os.path.join(HERE, "cleanup_write_test.py")], check=True, capture_output=True)
 
 def collect_orders(since_id):
-    out = sql(f"SELECT GROUP_CONCAT(id) FROM oms_order WHERE member_id=1 AND id > {since_id} AND member_username='test'")
-    return [int(x) for x in out.split(",")] if out and out.upper() != "NULL" else []
+    # 注意: 不能用 GROUP_CONCAT, 1024字节默认上限会静默截断大结果集
+    out = sql(f"SELECT id FROM oms_order WHERE member_id=1 AND id > {since_id} AND member_username='test'")
+    return [int(x) for x in out.splitlines() if x.strip()] if out else []
 
 def storm(stock, n, rtag):
     """一轮写风暴（JMeter barrier 同步），完成后自动清理还原。返回指标"""
     orig, cart_ids = write_setup(stock, n)
+    order_before = int(sql("SELECT IFNULL(MAX(id),0) FROM oms_order"))
     dbb = dbsnap.snapshot()
     t0 = now_iso()
     jmeter("-n", "-t", "/jmx/write_storm.jmx", f"-JTHREADS={n}", f"-JTOKEN={AUTH['portal']}",
@@ -188,7 +266,7 @@ def storm(stock, n, rtag):
     st = jtl.parse(os.path.join(JTL_DIR, f"write_{rtag}.jtl"))
     final = sql(f"SELECT stock, lock_stock FROM pms_sku_stock WHERE id={SKU_ID}").split("\t")
     prof = dbsnap.diff(dbb, dbsnap.snapshot(), top=10)
-    order_ids = collect_orders(max_order_before)
+    order_ids = collect_orders(order_before)
     state = {"sku_id": SKU_ID, "stock": stock, "lock_stock": 0,
              "orig_stock": orig["orig_stock"], "orig_lock_stock": orig["orig_lock_stock"],
              "cart_ids": [int(x) for x in cart_ids], "member_id": 1, "order_ids": order_ids}
@@ -200,18 +278,19 @@ def storm(stock, n, rtag):
          "sql_per_req": round(prof["total_stmts"] / max(n, 1), 1),
          "oversell": st["ok"] > stock or int(final[1]) < 0,
          "db_profile": prof, "window": {"start": t0, "end": t1}}
+    if st["err"]:
+        m["err_breakdown"] = st["err_breakdown"]
     log(f"  [{rtag}] 成功={m['success']} 落库={m['db_orders']} lock_stock={m['final_lock_stock']} "
         f"TPS={m['tps']} SQL/req={m['sql_per_req']} {'超卖' if m['oversell'] else 'OK'}")
     return m
 
-max_order_before = int(sql("SELECT IFNULL(MAX(id),0) FROM oms_order"))
-log(f"== [3] 写测试 × {ROUNDS}轮：正确性 / 吞吐 / 读写混合 ==")
-# 3.1 正确性：库存5，期望恰好5单
+log(f"== [3] 写测试 × {ROUNDS}轮：正确性 / 充足库存对照 / 读写混合 ==")
+# 3.1 正确性：库存5，期望恰好5单（该拒绝的拒绝了吗）
 for r in range(1, ROUNDS + 1):
     m = dict(storm(STOCK, THREADS, f"corr_r{r}"), round=r, mode="correctness")
     suite["write"].append(m)
 
-# 3.2 吞吐：库存充足(线程数×5)，全部成功，测写TPS
+# 3.2 充足库存对照：库存充足(线程数×5)，全部成功=拒绝机制无误杀（该成功的成功了吗）
 suite["throughput"] = []
 for r in range(1, ROUNDS + 1):
     m = dict(storm(THREADS * 5, THREADS, f"tput_r{r}"), round=r, mode="throughput")
@@ -221,6 +300,7 @@ for r in range(1, ROUNDS + 1):
 suite["mixed"] = []
 for r in range(1, ROUNDS + 1):
     orig, cart_ids = write_setup(200, 200)
+    order_before = int(sql("SELECT IFNULL(MAX(id),0) FROM oms_order"))
     dbb = dbsnap.snapshot()
     t0 = now_iso()
     reader = subprocess.Popen(
@@ -232,12 +312,12 @@ for r in range(1, ROUNDS + 1):
     time.sleep(3)
     jmeter("-n", "-t", "/jmx/write_storm.jmx", "-JTHREADS=200", f"-JTOKEN={AUTH['portal']}",
            "-l", f"/jtl/write_mix_r{r}.jtl", "-j", f"/jtl/jm_write_mix_r{r}.log")
-    reader.wait()
+    reader.wait(timeout=300)
     t1 = now_iso()
     rst = jtl.parse(os.path.join(JTL_DIR, f"read_mix_r{r}.jtl"))
     wst = jtl.parse(os.path.join(JTL_DIR, f"write_mix_r{r}.jtl"))
     prof = dbsnap.diff(dbb, dbsnap.snapshot(), top=5)
-    order_ids = collect_orders(max_order_before)
+    order_ids = collect_orders(order_before)
     final = sql(f"SELECT stock, lock_stock FROM pms_sku_stock WHERE id={SKU_ID}").split("\t")
     state = {"sku_id": SKU_ID, "stock": 200, "lock_stock": 0,
              "orig_stock": orig["orig_stock"], "orig_lock_stock": orig["orig_lock_stock"],
@@ -245,10 +325,16 @@ for r in range(1, ROUNDS + 1):
     write_cleanup(state)
     m = {"round": r,
          "read_tps_under_mix": rst["tps"], "read_p50_under_mix": rst["p50_ms"],
+         "read_ok_tps_under_mix": rst["ok_tps"], "read_p50_ok_under_mix": rst["ok_p50_ms"],
          "read_err_under_mix": rst["err_rate_pct"],
-         "write_tps_under_mix": wst["tps"], "write_success_under_mix": wst["ok"],
-         "write_sql_per_req": round(prof["total_stmts"] / max(200, 1), 1),
+         "write_tps_under_mix": wst["tps"], "write_ok_tps_under_mix": wst["ok_tps"],
+         "write_success_under_mix": wst["ok"],
+         "write_sql_per_req": round(prof["total_stmts"] / max(wst["total"], 1), 1),
          "window": {"start": t0, "end": t1}}
+    if rst["err"]:
+        m["read_err_breakdown"] = rst["err_breakdown"]
+    if wst["err"]:
+        m["write_err_breakdown"] = wst["err_breakdown"]
     suite["mixed"].append(m)
     log(f"  [混合r{r}] 读TPS={m['read_tps_under_mix']} 读P50={m['read_p50_under_mix']}ms | "
         f"写成功={m['write_success_under_mix']} 写TPS={m['write_tps_under_mix']}")
@@ -274,10 +360,18 @@ for s, v in suite["resources"].items():
     log(f"  {s}: cpu={v['cpu_cores_avg']}核 mem={v['mem_mb_avg']}MB GC={v['gc_pause_s']}s/{v['gc_count']}次")
 
 
+# ---------- 资源序列回填 (占时分布) ----------
+log("== [4.5] 资源占时分布序列 ==")
+try:
+    suite.update(rs.collect(overall_start, overall_end))
+    log(f"  容器: {', '.join(suite['res_series'].keys())}")
+except Exception as e:
+    log(f"  资源序列采集失败(不影响主数据): {type(e).__name__}: {e}")
+
 # ---------- 归档 ----------
-log("== [5] 归档结果 ==")
+log("== [5] 归档结果 ==" + (" (预热批, 不纳入统计)" if WARM else ""))
 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-outdir = os.path.join(RES, f"suite_{ts}")
+outdir = os.path.join(RES, f"{'warmup' if WARM else 'suite'}_{ts}")
 os.makedirs(outdir, exist_ok=True)
 json.dump(suite, open(os.path.join(outdir, "suite.json"), "w"), ensure_ascii=False, indent=2)
 log(f"完成: {os.path.join(outdir, 'suite.json')}")

@@ -45,7 +45,7 @@
         </CSVDataSet>
         <hashTree/>
         <SyncTimer guiclass="SyncTimerGui" testclass="SyncTimer" testname="barrier">
-          <intProp name="groupSize">200</intProp>
+          <stringProp name="groupSize">${__P(THREADS,200)}</stringProp>
           <longProp name="timeoutInMs">30000</longProp>
         </SyncTimer>
         <hashTree/>
