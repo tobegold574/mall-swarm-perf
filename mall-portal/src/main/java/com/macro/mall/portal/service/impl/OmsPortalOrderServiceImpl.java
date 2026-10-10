@@ -19,12 +19,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -242,10 +245,20 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
             }
             memberService.updateIntegration(currentMember.getId(), currentMember.getIntegration() - orderParam.getUseIntegration());
         }
-        //删除购物车中的下单商品
+        //删除购物车中的下单商品(订单一致性的一部分, 保留在事务内)
         deleteCartItemList(cartPromotionItemList, currentMember);
-        //发送延迟消息取消订单
-        sendDelayMessageCancelOrder(order.getId());
+        //发送延迟消息取消订单: MQ网络IO与设置查询挪到事务提交后, 缩短库存行锁持锁时间
+        final Long delayOrderId = order.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    sendDelayMessageCancelOrder(delayOrderId);
+                }
+            });
+        } else {
+            sendDelayMessageCancelOrder(delayOrderId);
+        }
         Map<String, Object> result = new HashMap<>();
         result.put("order", order);
         result.put("orderItemList", orderItemList);
@@ -327,10 +340,30 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
         }
     }
 
+    private final Map<Long, OmsOrderSetting> orderSettingCache = new ConcurrentHashMap<>();
+    private final Map<Long, Long> orderSettingCacheAt = new ConcurrentHashMap<>();
+    private static final long SETTING_CACHE_TTL_MS = 60_000;
+
+    private OmsOrderSetting getOrderSettingCached(Long id) {
+        Long at = orderSettingCacheAt.get(id);
+        if (at != null && System.currentTimeMillis() - at < SETTING_CACHE_TTL_MS) {
+            OmsOrderSetting v = orderSettingCache.get(id);
+            if (v != null) {
+                return v;
+            }
+        }
+        OmsOrderSetting v = orderSettingMapper.selectById(id);
+        if (v != null) {
+            orderSettingCache.put(id, v);
+            orderSettingCacheAt.put(id, System.currentTimeMillis());
+        }
+        return v;
+    }
+
     @Override
     public void sendDelayMessageCancelOrder(Long orderId) {
-        //获取订单超时时间
-        OmsOrderSetting orderSetting = orderSettingMapper.selectById(1L);
+        //获取订单超时时间(配置行堆内缓存, 60s TTL)
+        OmsOrderSetting orderSetting = getOrderSettingCached(1L);
         long delayTimes = orderSetting.getNormalOrderOvertime() * 60 * 1000;
         //发送延迟消息
         cancelOrderSender.sendMessage(orderId, delayTimes);
