@@ -16,6 +16,9 @@ import org.springframework.util.CollectionUtils;
 
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 首页内容管理Service实现类
@@ -41,18 +44,27 @@ public class HomeServiceImpl implements HomeService {
     @Override
     public HomeContentResult content() {
         HomeContentResult result = new HomeContentResult();
-        //获取首页广告
-        result.setAdvertiseList(getHomeAdvertiseList());
-        //获取推荐品牌
-        result.setBrandList(homeDao.getRecommendBrandList(0,6));
-        //获取秒杀信息
-        result.setHomeFlashPromotion(getHomeFlashPromotion());
-        //获取新品推荐
-        result.setNewProductList(homeDao.getNewProductList(0,4));
-        //获取人气推荐
-        result.setHotProductList(homeDao.getHotProductList(0,4));
-        //获取推荐专题
-        result.setSubjectList(homeDao.getRecommendSubjectList(0,4));
+        //六个板块互不依赖: 虚拟线程并行, 串行DB往返变一轮并行
+        try (var vt = Executors.newVirtualThreadPerTaskExecutor()) {
+            var advertiseF = vt.submit(this::getHomeAdvertiseList);
+            var brandF = vt.submit(() -> homeDao.getRecommendBrandList(0, 6));
+            var flashF = vt.submit(this::getHomeFlashPromotion);
+            var newF = vt.submit(() -> homeDao.getNewProductList(0, 4));
+            var hotF = vt.submit(() -> homeDao.getHotProductList(0, 4));
+            var subjectF = vt.submit(() -> homeDao.getRecommendSubjectList(0, 4));
+
+            result.setAdvertiseList(advertiseF.get());
+            result.setBrandList(brandF.get());
+            result.setHomeFlashPromotion(flashF.get());
+            result.setNewProductList(newF.get());
+            result.setHotProductList(hotF.get());
+            result.setSubjectList(subjectF.get());
+        } catch (InterruptedException | ExecutionException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new RuntimeException("首页内容并行查询失败", e);
+        }
         return result;
     }
 

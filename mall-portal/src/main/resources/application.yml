@@ -15,7 +15,7 @@ spring:
     druid:
       initial-size: 5 #连接池初始化大小
       min-idle: 10 #最小空闲连接数
-      max-active: 20 #最大连接数
+      max-active: 30 #最大连接数(写突发齐射时的余量, DB侧2C: 30已足够让事务在MySQL内排队而非池外等待)
       web-stat-filter:
         exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*" #不统计这些请求数据
       stat-view-servlet: #访问监控网页的登录用户名和密码
@@ -130,3 +130,7 @@ management:
         http:
           server:
             requests: true
+
+logging:
+  level:
+    com.macro.mall.common.log.WebLogAspect: warn
