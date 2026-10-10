@@ -6,8 +6,8 @@ const nextConfig = {
   ...(isExport
     ? {
         output: "export",
-        basePath: "/mall-swarm",
-        assetPrefix: "/mall-swarm",
+        basePath: "/mall-swarm-perf",
+        assetPrefix: "/mall-swarm-perf",
         trailingSlash: true,
       }
     : {}),
