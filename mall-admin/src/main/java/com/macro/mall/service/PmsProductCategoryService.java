@@ -55,4 +55,9 @@ public interface PmsProductCategoryService {
      * 以层级形式获取商品分类
      */
     List<PmsProductCategoryWithChildrenItem> listWithChildren();
+
+    /**
+     * 树接口的序列化结果缓存: 返回完整CommonResult响应的预序列化字节(与MVC输出逐字节一致)
+     */
+    byte[] listWithChildrenJson();
 }

@@ -1,6 +1,9 @@
 server:
   port: 8401
 spring:
+  threads:
+    virtual:
+      enabled: true
   application:
     name: mall-auth
   profiles:

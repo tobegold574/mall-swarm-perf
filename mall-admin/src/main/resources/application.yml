@@ -1,6 +1,9 @@
 server:
   port: 8080
 spring:
+  threads:
+    virtual:
+      enabled: true
   application:
     name: mall-admin
   profiles:
@@ -32,6 +35,9 @@ spring:
     multipart:
       enabled: true #开启文件上传
       max-file-size: 10MB #限制文件上传大小为10M
+logging:
+  level:
+    com.macro.mall.common.log.WebLogAspect: warn # 压测/生产降噪: INFO关闭时切面短路, 免除每请求的反射+响应体序列化开销
 mybatis-plus:
   mapper-locations:
     - classpath:dao/*.xml

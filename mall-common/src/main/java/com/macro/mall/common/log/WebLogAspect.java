@@ -53,6 +53,10 @@ public class WebLogAspect {
 
     @Around("webLog()")
     public Object doAround(ProceedingJoinPoint joinPoint) throws Throwable {
+        // INFO 被关闭(如压测/生产降噪)时, 跳过参数反射与 JSON 序列化等全部开销, 只透传业务方法
+        if (!LOGGER.isInfoEnabled()) {
+            return joinPoint.proceed();
+        }
         long startTime = System.currentTimeMillis();
         //获取当前请求对象
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();

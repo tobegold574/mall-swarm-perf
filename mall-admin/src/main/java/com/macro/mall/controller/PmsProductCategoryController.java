@@ -10,6 +10,8 @@ import com.macro.mall.service.PmsProductCategoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -109,9 +111,10 @@ public class PmsProductCategoryController {
 
     @Operation(summary = "查询所有一级分类及子分类")
     @RequestMapping(value = "/list/withChildren", method = RequestMethod.GET)
-    @ResponseBody
-    public CommonResult<List<PmsProductCategoryWithChildrenItem>> listWithChildren() {
-        List<PmsProductCategoryWithChildrenItem> list = productCategoryService.listWithChildren();
-        return CommonResult.success(list);
+    public ResponseEntity<byte[]> listWithChildren() {
+        // 命中缓存时直接写出预序列化字节; 字节由同一ObjectMapper生成, 与原CommonResult输出逐字节一致
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(productCategoryService.listWithChildrenJson());
     }
 }

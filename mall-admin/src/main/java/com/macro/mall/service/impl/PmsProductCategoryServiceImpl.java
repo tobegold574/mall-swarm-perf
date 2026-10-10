@@ -3,6 +3,7 @@ package com.macro.mall.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.github.pagehelper.PageHelper;
+import com.macro.mall.common.api.CommonResult;
 import com.macro.mall.common.exception.Asserts;
 import com.macro.mall.dao.PmsProductCategoryAttributeRelationDao;
 import com.macro.mall.dao.PmsProductCategoryDao;
@@ -18,6 +19,7 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -144,9 +146,41 @@ public class PmsProductCategoryServiceImpl implements PmsProductCategoryService 
                 .in(PmsProductCategory::getId, ids));
     }
 
+    private volatile List<PmsProductCategoryWithChildrenItem> cachedTree;
+    private volatile byte[] cachedTreeJson;
+    private volatile long cachedTreeAt;
+    private static final long TREE_CACHE_TTL_MS = 60_000;
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @Override
     public List<PmsProductCategoryWithChildrenItem> listWithChildren() {
-        return productCategoryDao.listWithChildren();
+        refreshTreeCache();
+        return cachedTree;
+    }
+
+    /**
+     * 树接口的序列化结果缓存: 命中时直接返回预序列化字节,
+     * 588KB响应的Jackson序列化从每请求一次降为每TTL一次。
+     * 字节由MVC同一ObjectMapper(Jackson3)生成, 与原Controller输出逐字节一致。
+     */
+    @Override
+    public byte[] listWithChildrenJson() {
+        refreshTreeCache();
+        return cachedTreeJson;
+    }
+
+    private synchronized List<PmsProductCategoryWithChildrenItem> refreshTreeCache() {
+        // 双重检查: 对象与序列化字节同一TTL一起重建
+        if (cachedTree != null && cachedTreeJson != null
+                && System.currentTimeMillis() - cachedTreeAt < TREE_CACHE_TTL_MS) {
+            return cachedTree;
+        }
+        List<PmsProductCategoryWithChildrenItem> data = productCategoryDao.listWithChildren();
+        cachedTree = data;
+        cachedTreeJson = objectMapper.writeValueAsBytes(CommonResult.success(data));
+        cachedTreeAt = System.currentTimeMillis();
+        return data;
     }
 
     /**
