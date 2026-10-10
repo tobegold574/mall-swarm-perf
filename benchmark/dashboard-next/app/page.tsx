@@ -347,7 +347,7 @@ export default function SuitesPage() {
               <table className="dtable">
                 <thead>
                   <tr><th>读写混合</th><th className="text-right">读有效TPS</th><th className="text-right">读P50(成功)</th>
-                      <th className="text-right">读err%</th><th className="text-right">写成功</th><th className="text-right">写有效TPS</th></tr>
+                      <th className="text-right">读err%</th><th className="text-right">写成功</th><th className="text-right">写齐射P50</th></tr>
                 </thead>
                 <tbody>
                   {[["A", A], ["B", B]].map(([label, s]: any) => {
@@ -365,7 +365,7 @@ export default function SuitesPage() {
                         <td className="l2num text-right">{med((m: any) => m.read_p50_ok_under_mix ?? m.read_p50_under_mix)}</td>
                         <td className="l2num text-right">{med((m: any) => m.read_err_under_mix)}</td>
                         <td className="l2num text-right">{mix.map((m: any) => m.write_success_under_mix).join("/") || "—"}</td>
-                        <td className="l2num text-right">{med((m: any) => m.write_ok_tps_under_mix ?? m.write_tps_under_mix)}</td>
+                        <td className="l2num text-right">{med((m: any) => m.write_p50_ok_under_mix)}</td>
                       </tr>
                     );
                   })}

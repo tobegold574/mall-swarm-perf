@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""解析 JMeter CSV jtl，输出与旧 Python 客户端同 schema 的统计
-err_breakdown: 失败按状态码归因——区分 '慢'(超时) 与 '坏'(4xx/5xx/业务码失败)，坏接口的 TPS 不可比"""
+"""解析 JMeter CSV jtl，输出统一口径统计
+- 有效TPS: 成功请求 ÷ 排空时长(首样本发出→末样本完成); 齐射场景=真实排空速率, 持续压测≈窗口吞吐
+- err_breakdown: 失败按状态码归因——区分 '慢'(超时) 与 '坏'(4xx/5xx/业务码失败), 坏接口的TPS不可比
+- 延迟分位数只统计成功样本; 成功占比<1%时置None(不展示)"""
 import csv
 
 def _bucket(row):
@@ -18,19 +20,17 @@ def _bucket(row):
     return "unknown"
 
 def parse(path):
-    lat, ok_lat = [], []
+    samples = []          # (ts_ms, elapsed_ms)
+    ok_lat = []
     ok, err = 0, 0
     breakdown = {}
-    ts_min, ts_max = None, None
     with open(path) as f:
         for row in csv.DictReader(f):
             try:
                 t = int(row["timeStamp"]); e = int(row["elapsed"])
             except (KeyError, ValueError):
                 continue
-            lat.append(e)
-            ts_min = t if ts_min is None or t < ts_min else ts_min
-            ts_max = t if ts_max is None or t > ts_max else ts_max
+            samples.append((t, e))
             if row.get("success") == "true":
                 ok += 1
                 ok_lat.append(e)
@@ -39,8 +39,10 @@ def parse(path):
                 b = _bucket(row)
                 breakdown[b] = breakdown.get(b, 0) + 1
     total = ok + err
-    lat.sort(); ok_lat.sort()
-    wall = (ts_max - ts_min) / 1000.0 if ts_min and ts_max and ts_max > ts_min else 0.001
+    lat = sorted(e for _, e in samples)
+    ok_lat.sort()
+    ts_min = min(t for t, _ in samples) if samples else 0
+    drain = (max(t + e for t, e in samples) - ts_min) / 1000.0 if samples else 0.001
     def pct(p): return lat[int(len(lat) * p)] if lat else 0
     def ok_pct(p):
         # 延迟分位数只统计成功样本; 成功占比<1%时无统计意义, 置None(不展示)
@@ -50,9 +52,10 @@ def parse(path):
     return {"total": total, "ok": ok, "err": err,
             "err_rate_pct": round(err * 100.0 / total, 2) if total else 100.0,
             "err_breakdown": dict(sorted(breakdown.items(), key=lambda i: -i[1])),
-            "tps": round(total / wall, 1),
-            "ok_tps": round(ok / wall, 1),
+            "tps": round(total / drain, 1),
+            "ok_tps": round(ok / drain, 1),
+            "drain_s": round(drain, 3),
             "p50_ms": pct(0.50), "p95_ms": pct(0.95), "p99_ms": pct(0.99),
             "ok_p50_ms": ok_pct(0.50), "ok_p95_ms": ok_pct(0.95), "ok_p99_ms": ok_pct(0.99),
             "avg_ms": round(sum(lat) / len(lat), 1) if lat else 0,
-            "wall_s": round(wall, 1)}
+            "wall_s": round(drain, 3)}

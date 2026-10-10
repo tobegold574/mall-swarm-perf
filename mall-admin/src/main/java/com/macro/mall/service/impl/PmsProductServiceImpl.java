@@ -215,21 +215,24 @@ public class PmsProductServiceImpl implements PmsProductService {
 
     /**
      * 分页获取数据
+     * 深分页优化: 无可选过滤条件且偏移量较深时走延迟关联(内层覆盖索引扫描+按主键回表),
+     * 消除深偏移的全行回表; 浅页(offset<阈值)延迟关联无收益纯付JOIN成本, 走原生路径。
+     * 行集与原路径完全一致
      */
+    private static final long DEFERRED_JOIN_MIN_OFFSET = 1000;
+
     @Override
     public List<PmsProduct> list(PmsProductQueryParam productQueryParam, Integer pageSize, Integer pageNum) {
-        // 深分页优化: 无可选过滤条件时走延迟关联(覆盖索引扫描+按主键回表),
-        // 避免 LIMIT 深偏移的10万行全表扫描; 行集与原路径完全一致
         boolean hasFilter = productQueryParam.getPublishStatus() != null
                 || productQueryParam.getVerifyStatus() != null
                 || !StringUtils.isEmpty(productQueryParam.getKeyword())
                 || !StringUtils.isEmpty(productQueryParam.getProductSn())
                 || productQueryParam.getBrandId() != null
                 || productQueryParam.getProductCategoryId() != null;
-        if (!hasFilter) {
+        long offset = (long) (pageNum - 1) * pageSize;
+        if (!hasFilter && offset >= DEFERRED_JOIN_MIN_OFFSET) {
             long total = productMapper.selectCount(new LambdaQueryWrapper<PmsProduct>()
                     .eq(PmsProduct::getDeleteStatus, 0));
-            long offset = (long) (pageNum - 1) * pageSize;
             List<PmsProduct> list = productMapper.selectPageDeferred(offset, pageSize);
             Page<PmsProduct> page = new Page<>(pageNum, pageSize);
             page.setTotal(total);
