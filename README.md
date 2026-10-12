@@ -32,6 +32,7 @@
   1. 镜像指纹：A `admin:2e620b02 / portal:42b3e863`（10-07 快照），B `admin:a8a5175f / portal:646479a6`（10-10 构建）；
   2. 字节码标记：B 镜像含全部优化标记（COUNT 缓存/失效钩子/延迟关联/全文检索），A 镜像 0/4；A 的订单类为**修复前**的 `setLockStock` 读-改-写实现；
   3. SQL 运行时指纹（performance_schema 抓取）：见[第五节](#五sql-指纹证据为什么-ais-a-b-is-b)。
+- **运行时口径（重要披露）**：A = 原作者原版栈（**JDK 17**，上游选型，未做升级）；B = 优化栈（**JDK 25**（`8a60c05` 基础层升级）+ Spring Boot 4）。JDK 升级是 B 侧优化的**前置刀**——虚拟线程需要 21+，A 侧本就不存在 VT。因此本报告的性能数字为**栈级 A/B**（升级+优化 vs 原版），不是纯代码增量；VT 是并行化结构的启用前提，其独立贡献与 JDK 25 的 GC/JIT 增益在栈级口径下不可剥离。写正确性结论不受运行时差异影响（纯代码语义，字节码+SQL 双证）。
 - **压测夹具**：100,038 商品（100,020 有效）/ 1,024 品牌，商品名为「品牌×品类×版本」多样化组合（正确 UTF-8）；探针关键词「手机」命中 **12,504** 行，`MATCH` 与 `LIKE` 命中集合经 DB 实测完全一致（语义等价）。
 
 ---
@@ -100,7 +101,7 @@ A **16.0** 条/单 → B **4.9** 条/单（事务收窄 + 设置缓存，见 [4.
 - **文件**：`mall-admin/.../PmsProductCategoryServiceImpl.java`、`PmsProductCategoryController.java`、`mall-admin/src/main/resources/application.yml`、`mall-common/.../WebLogAspect.java`、`mall-auth/src/main/resources/application.yml`
 - **根因**：树接口每请求加载全部分类 + 递归组装 + 序列化 588KB JSON；WebLog 切面对每个请求做反射 + 响应体序列化。
 - **更改**：树对象 + 预序列化字节双层缓存（60s TTL，双重检查锁，命中直接输出字节，与原输出逐字节一致）；切面 INFO 级短路；admin/auth 开启虚拟线程。
-- **实测**：`admin_category_tree` 从 100% 读超时（失败 P50 30.3s）→ **181.7 TPS / P50 179ms**；`admin_brand_list` +247%（SQL 指纹与 A 完全一致，增益全部来自服务层：切面短路 + VT）。
+- **实测**：`admin_category_tree` 从 100% 读超时（失败 P50 30.3s）→ **181.7 TPS / P50 179ms**；`admin_brand_list` +247%（SQL 指纹与 A 完全一致，增益来自服务层与运行时升级：切面短路 / VT / JDK 25 的 GC-JIT 改进，栈级口径下不细分）。
 
 ### 4.2 `6ca3851` — perf(portal): 详情/首页 VT 并行化 + 属性堆缓存 + 搜索全文优先降级 + Druid 池容
 
@@ -213,4 +214,4 @@ ls results/suite_*_ab{A,B}/suite.json   # env指纹 + 读10接口×3轮 + 写3+�
 ## 附
 
 - 上游 mall-swarm 项目文档（部署/架构/各模块说明）：[README_mall-swarm.md](README_mall-swarm.md)
-- 优化系列提交（master，按刀分组）：`c94a419` → `edc7180` / `6ca3851` / `1156328` / `3777a87` → `37e01d8` / `7d24007` → `8c3af1c` / `dbe6bfb` → `430f3b0` / `1035e61` / `71b326d` / `57bfdb0`
+- 优化系列提交（master，按刀分组）：前置 `5e444a3`（Spring Boot 4 / Spring Cloud 2025 迁移）+ `8a60c05`（**JDK 17→25**，为虚拟线程铺路）→ `c94a419`（守卫式扣减）→ `edc7180` / `6ca3851` / `1156328` / `3777a87` → `37e01d8` / `7d24007` → `8c3af1c` / `dbe6bfb` → `430f3b0` / `1035e61` / `71b326d` / `57bfdb0`
